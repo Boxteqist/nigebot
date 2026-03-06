@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NigeBot Tests</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f13; color: #f0f0f0; font-family: 'Segoe UI', sans-serif; padding: 24px; }
+  h1 { color: #DC0000; font-size: 1.3rem; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 0.85rem; margin-bottom: 24px; }
+  .btn { background: #DC0000; color: #fff; border: none; border-radius: 8px; padding: 10px 20px; cursor: pointer; font-size: 0.9rem; font-weight: 600; margin-bottom: 20px; }
+  .btn:hover { background: #b00000; }
+  .test-group { background: #1a1a24; border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a3a; }
+  .test-group h2 { font-size: 0.85rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+  .test { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1a1a24; font-size: 0.88rem; }
+  .test:last-child { border-bottom: none; }
+  .test-icon { font-size: 1rem; margin-top: 1px; min-width: 20px; }
+  .test-name { flex: 1; }
+  .test-detail { font-size: 0.75rem; color: #888; margin-top: 2px; }
+  .test-status { font-size: 0.78rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+  .status-pass { background: #1a3a1a; color: #4caf50; }
+  .status-fail { background: #3a1a1a; color: #ff6b6b; }
+  .status-running { background: #1a2a3a; color: #4a9eff; }
+  .status-pending { background: #2a2a3a; color: #888; }
+  .summary { background: #1a1a24; border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a3a; display: flex; gap: 20px; align-items: center; }
+  .summary-num { font-size: 2rem; font-weight: 800; }
+  .summary-num.pass { color: #4caf50; }
+  .summary-num.fail { color: #ff6b6b; }
+  .summary-num.pending { color: #888; }
+  .summary-label { font-size: 0.75rem; color: #888; text-transform: uppercase; }
+  .hidden { display: none; }
+  .progress { background: #2a2a3a; border-radius: 4px; height: 6px; margin-bottom: 20px; overflow: hidden; }
+  .progress-bar { background: #DC0000; height: 100%; border-radius: 4px; transition: width 0.3s; }
+</style>
+</head>
+<body>
+
+<h1>🏁 NigeBot Test Suite</h1>
+<p class="subtitle">Runs automated checks against Supabase and scoring logic</p>
+
+<button class="btn" onclick="runAll()">▶ Run All Tests</button>
+
+<div class="progress"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+
+<div class="summary" id="summary">
+  <div><div class="summary-num pending" id="passCount">—</div><div class="summary-label">Passed</div></div>
+  <div><div class="summary-num fail" id="failCount">—</div><div class="summary-label">Failed</div></div>
+  <div><div class="summary-num pending" id="pendingCount">—</div><div class="summary-label">Pending</div></div>
+</div>
+
+<div id="testGroups"></div>
+
+<script>
+const SB_URL = 'https://qkmukcuqosvlumsrqyay.supabase.co';
+const SB_KEY = 'sb_publishable_dkJN0bxvkkW7JHXAvZ62XQ_tpxexARU';
+const hdrs = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+const QUALI_PTS = [12.5, 9, 7.5];
+const RACE_PTS = [25, 18, 15];
+
+const DRIVER_CODES = {
+  'VER':'Verstappen','NOR':'Norris','LEC':'Leclerc','PIA':'Piastri',
+  'HAM':'Hamilton','RUS':'Russell','ANT':'Antonelli'
+};
+
+function norm(s) {
+  if (!s) return '';
+  const up = s.trim().toUpperCase();
+  if (DRIVER_CODES[up]) return DRIVER_CODES[up].toLowerCase();
+  return s.trim().toLowerCase();
+}
+
+function calcScore(preds, results, pts) {
+  let total = 0;
+  preds.forEach((pred, pi) => {
+    if (!pred) return;
+    const ei = results.findIndex(r => norm(r) === norm(pred));
+    if (ei === pi) total += pts[pi];
+    else if (ei !== -1 && Math.abs(ei - pi) === 1) total += pts[ei] / 2;
+  });
+  return total;
+}
+
+async function sbGet(path) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: hdrs });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+async function sbUpsert(path, body) {
+  const h = { ...hdrs, 'Prefer': 'resolution=merge-duplicates,return=representation' };
+  let url = `${SB_URL}/rest/v1/${path}`;
+  if (path === 'predictions') url += '?on_conflict=player_name,race_id';
+  if (path === 'scores') url += '?on_conflict=player_name,race_id';
+  if (path === 'races') url += '?on_conflict=season,round';
+  if (path === 'results') url += '?on_conflict=race_id';
+  const r = await fetch(url, { method: 'POST', headers: h, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json(); throw new Error(e.message || `HTTP ${r.status}`); }
+  return r.json();
+}
+
+async function sbDelete(path) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, { method: 'DELETE', headers: hdrs });
+  return r.ok;
+}
+
+// --- TEST DEFINITIONS ---
+const testGroups = [
+  {
+    name: 'Scoring Logic',
+    tests: [
+      {
+        name: 'Exact match — Race P1',
+        detail: 'Predict Verstappen P1, he finishes P1 → 25pts',
+        run: () => {
+          const score = calcScore(['Verstappen'], ['Verstappen', 'Norris', 'Hamilton'], RACE_PTS);
+          if (score !== 25) throw new Error(`Expected 25, got ${score}`);
+        }
+      },
+      {
+        name: 'One position off — Race P1 predicted, finishes P2',
+        detail: 'Predict Verstappen P1, he finishes P2 → half of P2 = 9pts',
+        run: () => {
+          const score = calcScore(['Verstappen'], ['Norris', 'Verstappen', 'Hamilton'], RACE_PTS);
+          if (score !== 9) throw new Error(`Expected 9, got ${score}`);
+        }
+      },
+      {
+        name: 'Two positions off — zero points',
+        detail: 'Predict Verstappen P1, he finishes P3 → 0pts',
+        run: () => {
+          const score = calcScore(['Verstappen'], ['Norris', 'Hamilton', 'Verstappen'], RACE_PTS);
+          if (score !== 0) throw new Error(`Expected 0, got ${score}`);
+        }
+      },
+      {
+        name: 'Not in top 3 — zero points',
+        detail: 'Predict Alonso P1, he doesn\'t finish top 3 → 0pts',
+        run: () => {
+          const score = calcScore(['Alonso'], ['Verstappen', 'Norris', 'Hamilton'], RACE_PTS);
+          if (score !== 0) throw new Error(`Expected 0, got ${score}`);
+        }
+      },
+      {
+        name: 'Driver code recognised — VER = Verstappen',
+        detail: 'Predict VER P1, Verstappen finishes P1 → 25pts',
+        run: () => {
+          const score = calcScore(['VER'], ['Verstappen', 'Norris', 'Hamilton'], RACE_PTS);
+          if (score !== 25) throw new Error(`Expected 25, got ${score}`);
+        }
+      },
+      {
+        name: 'Full qualifying prediction',
+        detail: 'VER P1, PIA P2, HAM P3 — all exact → 12.5 + 9 + 7.5 = 29pts',
+        run: () => {
+          const score = calcScore(['VER','PIA','HAM'], ['Verstappen','Piastri','Hamilton'], QUALI_PTS);
+          if (score !== 29) throw new Error(`Expected 29, got ${score}`);
+        }
+      },
+      {
+        name: 'Full race prediction — Tim\'s Australia picks',
+        detail: 'HAM P1, VER P2, ANT P3 vs actual results',
+        run: () => {
+          const score = calcScore(['HAM','VER','ANT'], ['Hamilton','Verstappen','Antonelli'], RACE_PTS);
+          if (score !== 58) throw new Error(`Expected 58, got ${score}`);
+        }
+      },
+    ]
+  },
+  {
+    name: 'Supabase Connection',
+    tests: [
+      {
+        name: 'Can connect to Supabase',
+        detail: 'Basic read from races table',
+        run: async () => {
+          await sbGet('races?limit=1');
+        }
+      },
+      {
+        name: 'Can read predictions table',
+        detail: 'Fetch from predictions table',
+        run: async () => {
+          await sbGet('predictions?limit=1');
+        }
+      },
+      {
+        name: 'Can read scores table',
+        detail: 'Fetch from scores table',
+        run: async () => {
+          await sbGet('scores?limit=1');
+        }
+      },
+      {
+        name: 'Can read results table',
+        detail: 'Fetch from results table',
+        run: async () => {
+          await sbGet('results?limit=1');
+        }
+      },
+    ]
+  },
+  {
+    name: 'Prediction Save & Update',
+    tests: [
+      {
+        name: 'Can save a prediction',
+        detail: 'Writes a test prediction to Supabase',
+        run: async () => {
+          const races = await sbGet('races?limit=1');
+          if (!races.length) throw new Error('No races in DB — select a race first');
+          const raceId = races[0].id;
+          const res = await sbUpsert('predictions', {
+            race_id: raceId, player_name: '__test__',
+            quali_p1: 'Verstappen', quali_p2: 'Norris', quali_p3: 'Hamilton',
+            race_p1: 'Norris', race_p2: 'Verstappen', race_p3: 'Leclerc',
+            submitted_at: new Date().toISOString()
+          });
+          if (!res || res.error) throw new Error(res?.error?.message || 'Save failed');
+        }
+      },
+      {
+        name: 'Can update an existing prediction',
+        detail: 'Updates the test prediction without 409 conflict',
+        run: async () => {
+          const races = await sbGet('races?limit=1');
+          if (!races.length) throw new Error('No races in DB');
+          const raceId = races[0].id;
+          const res = await sbUpsert('predictions', {
+            race_id: raceId, player_name: '__test__',
+            quali_p1: 'Hamilton', quali_p2: 'Piastri', quali_p3: 'Sainz',
+            race_p1: 'Hamilton', race_p2: 'Norris', race_p3: 'Verstappen',
+            submitted_at: new Date().toISOString()
+          });
+          if (!res || res.error) throw new Error(res?.error?.message || 'Update failed');
+          if (res[0]?.quali_p1 !== 'Hamilton') throw new Error('Update did not persist');
+        }
+      },
+      {
+        name: 'Updated prediction reads back correctly',
+        detail: 'Reads the test prediction and confirms the update',
+        run: async () => {
+          const races = await sbGet('races?limit=1');
+          if (!races.length) throw new Error('No races in DB');
+          const raceId = races[0].id;
+          const preds = await sbGet(`predictions?race_id=eq.${raceId}&player_name=eq.__test__`);
+          if (!preds.length) throw new Error('Prediction not found');
+          if (preds[0].quali_p1 !== 'Hamilton') throw new Error(`Expected Hamilton, got ${preds[0].quali_p1}`);
+        }
+      },
+      {
+        name: 'Clean up test data',
+        detail: 'Removes the __test__ prediction from DB',
+        run: async () => {
+          const h = { ...hdrs };
+          const r = await fetch(`${SB_URL}/rest/v1/predictions?player_name=eq.__test__`, { method: 'DELETE', headers: h });
+          if (!r.ok) throw new Error(`Cleanup failed: HTTP ${r.status}`);
+        }
+      },
+    ]
+  }
+];
+
+// --- RENDER & RUN ---
+let results = {};
+
+function renderGroups() {
+  const container = document.getElementById('testGroups');
+  container.innerHTML = testGroups.map((g, gi) => `
+    <div class="test-group">
+      <h2>${g.name}</h2>
+      ${g.tests.map((t, ti) => `
+        <div class="test" id="test_${gi}_${ti}">
+          <div class="test-icon" id="icon_${gi}_${ti}">⏳</div>
+          <div class="test-name">
+            <div>${t.name}</div>
+            <div class="test-detail">${t.detail}</div>
+          </div>
+          <div class="test-status status-pending" id="status_${gi}_${ti}">Pending</div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+async function runAll() {
+  renderGroups();
+  let passed = 0, failed = 0;
+  const total = testGroups.reduce((a, g) => a + g.tests.length, 0);
+  let done = 0;
+
+  for (let gi = 0; gi < testGroups.length; gi++) {
+    const g = testGroups[gi];
+    for (let ti = 0; ti < g.tests.length; ti++) {
+      const t = g.tests[ti];
+      const statusEl = document.getElementById(`status_${gi}_${ti}`);
+      const iconEl = document.getElementById(`icon_${gi}_${ti}`);
+      statusEl.className = 'test-status status-running';
+      statusEl.textContent = 'Running…';
+      iconEl.textContent = '⏳';
+      try {
+        await t.run();
+        statusEl.className = 'test-status status-pass';
+        statusEl.textContent = 'Pass';
+        iconEl.textContent = '✅';
+        passed++;
+      } catch(e) {
+        statusEl.className = 'test-status status-fail';
+        statusEl.textContent = 'Fail';
+        iconEl.textContent = '❌';
+        const detailEl = document.querySelector(`#test_${gi}_${ti} .test-detail`);
+        detailEl.textContent = `❌ ${e.message}`;
+        detailEl.style.color = '#ff6b6b';
+        failed++;
+      }
+      done++;
+      document.getElementById('progressBar').style.width = `${(done/total)*100}%`;
+      document.getElementById('passCount').textContent = passed;
+      document.getElementById('failCount').textContent = failed;
+      document.getElementById('pendingCount').textContent = total - done;
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+  document.getElementById('passCount').className = 'summary-num pass';
+  document.getElementById('progressBar').style.background = failed > 0 ? '#ff6b6b' : '#4caf50';
+}
+
+renderGroups();
+</script>
+</body>
+</html>
