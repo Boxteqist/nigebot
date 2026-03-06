@@ -499,16 +499,19 @@ async function loadStats() {
   races.forEach(race=>{ PLAYERS.forEach(p=>{ const has=preds.find(pr=>pr.race_id===race.id&&pr.player_name===p&&(pr.quali_p1||pr.race_p1)); if(!has) missedCounts[p]++; }); });
   results.forEach(res=>{ preds.filter(pr=>pr.race_id===res.race_id).forEach(pr=>{ if(norm(pr.quali_p1)===norm(res.quali_p1)) poleHits[pr.player_name]=(poleHits[pr.player_name]||0)+1; if(norm(pr.race_p1)===norm(res.race_p1)) winHits[pr.player_name]=(winHits[pr.player_name]||0)+1; }); });
 
-  const leader=Object.entries(totals).sort((a,b)=>b[1]-a[1])[0];
-  const mostPoles=Object.entries(poleHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
-  const mostWins=Object.entries(winHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
-  const fewestMissed=Object.entries(missedCounts).sort((a,b)=>a[1]-b[1])[0];
+  const leader = Object.entries(totals).sort((a,b)=>b[1]-a[1])[0];
+  const mostPoles = Object.entries(poleHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
+  const mostWins  = Object.entries(winHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
+  const fewestMissed = Object.entries(missedCounts).sort((a,b)=>a[1]-b[1])[0];
+  const hasScores = leader[1] > 0;
+  const hasPoles  = mostPoles[1] > 0;
+  const hasWins   = mostWins[1] > 0;
 
   document.getElementById('keyStats').innerHTML = `
-    <div class="stat-card"><div class="stat-val">🏆</div><div class="stat-player">${leader[0]}</div><div class="stat-name">Current Leader</div><div class="stat-val" style="font-size:1rem">${leader[1]} pts</div></div>
+    <div class="stat-card"><div class="stat-val">🏆</div><div class="stat-player">${hasScores ? leader[0] : '—'}</div><div class="stat-name">Current Leader</div><div class="stat-val" style="font-size:1rem">${hasScores ? leader[1]+' pts' : 'No data yet'}</div></div>
     <div class="stat-card"><div class="stat-val">${races.length}</div><div class="stat-name">Races Scored</div></div>
-    <div class="stat-card"><div class="stat-val">${mostPoles[1]}</div><div class="stat-player">${mostPoles[0]}</div><div class="stat-name">Most Pole Calls</div></div>
-    <div class="stat-card"><div class="stat-val">${mostWins[1]}</div><div class="stat-player">${mostWins[0]}</div><div class="stat-name">Most Win Calls</div></div>
+    <div class="stat-card"><div class="stat-val">${hasPoles ? mostPoles[1] : '—'}</div><div class="stat-player">${hasPoles ? mostPoles[0] : ''}</div><div class="stat-name">Most Pole Calls</div></div>
+    <div class="stat-card"><div class="stat-val">${hasWins ? mostWins[1] : '—'}</div><div class="stat-player">${hasWins ? mostWins[0] : ''}</div><div class="stat-name">Most Win Calls</div></div>
     <div class="stat-card"><div class="stat-val">${fewestMissed[1]}</div><div class="stat-player">${fewestMissed[0]}</div><div class="stat-name">Fewest Missed</div></div>
     <div class="stat-card"><div class="stat-val">${Object.values(missedCounts).reduce((a,b)=>a+b,0)}</div><div class="stat-name">Total Missed Rounds</div></div>`;
 
@@ -525,14 +528,15 @@ async function loadStats() {
   const mrSun=Object.entries(raceTots).sort((a,b)=>b[1]-a[1])[0];
   const vol=(() =>{ let mx=0,k='—'; PLAYERS.forEach(p=>{ const pts=races.map(r=>(scores.find(s=>s.race_id===r.id&&s.player_name===p)||{total_score:0}).total_score); const sw=Math.max(...pts)-Math.min(...pts.filter(x=>x>0)); if(sw>mx){mx=sw;k=p;} }); return [k,mx]; })();
   const con=(() =>{ let mi=Infinity,k='—'; PLAYERS.forEach(p=>{ const pts=races.map(r=>(scores.find(s=>s.race_id===r.id&&s.player_name===p)||{total_score:0}).total_score).filter(x=>x>0); if(pts.length<2)return; const mean=pts.reduce((a,b)=>a+b,0)/pts.length; const v=pts.reduce((a,b)=>a+Math.pow(b-mean,2),0)/pts.length; if(v<mi){mi=v;k=p;} }); return [k]; })();
-  document.getElementById('awardsGrid').innerHTML=[
-    {icon:'🎯',title:'Most Pole Calls',player:mostPoles[0],detail:`${mostPoles[1]} correct poles`},
-    {icon:'🏁',title:'Most Win Calls',player:mostWins[0],detail:`${mostWins[1]} correct winners`},
+  document.getElementById('awardsGrid').innerHTML = hasScores ? [
+    {icon:'🎯',title:'Most Pole Calls',player:hasPoles?mostPoles[0]:'—',detail:hasPoles?`${mostPoles[1]} correct poles`:'No data yet'},
+    {icon:'🏁',title:'Most Win Calls',player:hasWins?mostWins[0]:'—',detail:hasWins?`${mostWins[1]} correct winners`:'No data yet'},
     {icon:'⏱️',title:'Mr Saturday',player:mrSat[0],detail:`${mrSat[1]} qualifying pts`},
     {icon:'🌞',title:'Sunday Merchant',player:mrSun[0],detail:`${mrSun[1]} race pts`},
     {icon:'🎢',title:'Volatility King',player:vol[0],detail:`${vol[1]}pt swing`},
     {icon:'🧱',title:'Consistency King',player:con[0],detail:`Lowest score variance`},
-  ].map(a=>`<div class="award-card"><div class="award-icon">${a.icon}</div><div><div class="award-title">${a.title}</div><div class="award-player">${a.player}</div><div class="award-detail">${a.detail}</div></div></div>`).join('');
+  ].map(a=>`<div class="award-card"><div class="award-icon">${a.icon}</div><div><div class="award-title">${a.title}</div><div class="award-player">${a.player}</div><div class="award-detail">${a.detail}</div></div></div>`).join('')
+  : '<p style="color:#888;font-size:0.85rem;">Awards will appear once races have been scored.</p>';
 }
 
 async function loadLeaderboard() {
