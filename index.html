@@ -289,6 +289,7 @@ const CALENDAR_2026 = [
 let currentRaceId = null;
 let allRaces = [];
 let pointsChartInst = null;
+let isDirty = false;
 
 async function sbGet(path) {
   const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: hdrs });
@@ -329,6 +330,12 @@ async function loadRaces() {
 }
 
 async function onRaceChange() {
+  if (isDirty && !confirm('You have unsaved predictions — are you sure you want to switch races?')) {
+    // revert dropdown to current race
+    const sel = document.getElementById('raceSel');
+    sel.value = allRaces.find(r => r.id === currentRaceId)?.round || '';
+    return;
+  }
   const round = document.getElementById('raceSel').value;
   const raceStatus = document.getElementById('raceStatus');
   if (!round) return;
@@ -357,8 +364,11 @@ async function onRaceChange() {
     document.getElementById('predictionsCard').classList.remove('hidden');
     document.getElementById('noRaceMsg').classList.add('hidden');
     renderPredGrid();
-    loadExistingPredictions();
+    await loadExistingPredictions();
     loadExistingResults();
+    isDirty = false;
+    // mark dirty on any input change
+    document.querySelectorAll('#predGrid input').forEach(el => el.addEventListener('input', () => isDirty = true));
   } catch(e) {
     raceStatus.className = 'status-msg error';
     raceStatus.textContent = '❌ Failed to load race. Check Supabase connection.';
@@ -414,7 +424,7 @@ async function savePredictions() {
     submitted_at: new Date().toISOString()
   }));
   const res = await sbUpsert('predictions', rows);
-  if (res && !res.error) showStatus('saveStatus','success','✅ All predictions saved!');
+  if (res && !res.error) { showStatus('saveStatus','success','✅ All predictions saved!'); isDirty = false; }
   else showStatus('saveStatus','error','❌ Error saving.');
 }
 
