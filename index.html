@@ -359,7 +359,6 @@ async function loadRaces() {
 
 async function onRaceChange() {
   if (isDirty && !confirm('You have unsaved predictions — are you sure you want to switch races?')) {
-    // revert dropdown to current race
     const sel = document.getElementById('raceSel');
     sel.value = allRaces.find(r => r.id === currentRaceId)?.round || '';
     return;
