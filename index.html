@@ -310,7 +310,13 @@ async function sbUpsert(path, body) {
     'Prefer': 'resolution=merge-duplicates,return=representation',
     'Content-Type': 'application/json'
   };
-  const r = await fetch(`${SB_URL}/rest/v1/${path}`, { 
+  // Append on_conflict parameter to URL for explicit upsert columns
+  let url = `${SB_URL}/rest/v1/${path}`;
+  if (path === 'predictions') url += '?on_conflict=player_name,race_id';
+  if (path === 'scores') url += '?on_conflict=player_name,race_id';
+  if (path === 'races') url += '?on_conflict=season,round';
+  if (path === 'results') url += '?on_conflict=race_id';
+  const r = await fetch(url, { 
     method: 'POST', 
     headers: h, 
     body: JSON.stringify(body) 
