@@ -296,8 +296,21 @@ async function sbGet(path) {
   return r.json();
 }
 async function sbUpsert(path, body) {
-  const h = { ...hdrs, 'Prefer': 'resolution=merge-duplicates,return=representation' };
-  const r = await fetch(`${SB_URL}/rest/v1/${path}`, { method: 'POST', headers: h, body: JSON.stringify(body) });
+  const h = { 
+    ...hdrs, 
+    'Prefer': 'resolution=merge-duplicates,return=representation',
+    'Content-Type': 'application/json'
+  };
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, { 
+    method: 'POST', 
+    headers: h, 
+    body: JSON.stringify(body) 
+  });
+  if (!r.ok) {
+    const err = await r.json();
+    console.error('Supabase error:', err);
+    return { error: err };
+  }
   return r.json();
 }
 
