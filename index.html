@@ -107,6 +107,7 @@
     <button class="tab active" onclick="showTab('enter',this)">📋 Predictions</button>
     <button class="tab" onclick="showTab('stats',this)">📊 Stats</button>
     <button class="tab" onclick="showTab('leaderboard',this)">🏆 Leaderboard</button>
+    <button class="tab" onclick="showTab('scoring',this)">📖 Scoring</button>
   </div>
 
   <div class="card">
@@ -130,11 +131,14 @@
 
   <!-- PREDICTIONS TAB -->
   <div id="enterTab">
-    <div class="card">
+    <div class="card hidden" id="predictionsCard">
       <h2>Predictions</h2>
       <div class="pred-grid" id="predGrid"></div>
       <button class="btn full" style="margin-top:16px" onclick="savePredictions()">💾 Save All Predictions</button>
       <div id="saveStatus" class="status-msg hidden"></div>
+    </div>
+    <div id="noRaceMsg" style="text-align:center;color:#888;font-size:0.9rem;padding:40px 0;">
+      👆 Select a season and race above to enter predictions
     </div>
     <div class="card">
       <h2>F1 Results</h2>
@@ -180,7 +184,45 @@
     </div>
   </div>
 
-  <!-- LEADERBOARD TAB -->
+  <!-- SCORING TAB -->
+  <div id="scoringTab" class="hidden">
+    <div class="card">
+      <h2>How Scoring Works</h2>
+      <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">Each race weekend you predict the top 3 in qualifying and the top 3 in the race. Points are awarded as follows:</p>
+      <div class="two-col" style="margin-bottom:20px;">
+        <div>
+          <div class="section-title">Qualifying</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <thead><tr><th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">Position</th><th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">Exact</th><th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">One off</th></tr></thead>
+            <tbody>
+              <tr><td style="padding:8px;color:#ffd700">🥇 P1</td><td style="padding:8px">12.5 pts</td><td style="padding:8px;color:#888">6.25 pts</td></tr>
+              <tr><td style="padding:8px;color:#c0c0c0">🥈 P2</td><td style="padding:8px">9 pts</td><td style="padding:8px;color:#888">4.5 pts</td></tr>
+              <tr><td style="padding:8px;color:#cd7f32">🥉 P3</td><td style="padding:8px">7.5 pts</td><td style="padding:8px;color:#888">3.75 pts</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="section-title">Race</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <thead><tr><th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">Position</th><th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">Exact</th><th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">One off</th></tr></thead>
+            <tbody>
+              <tr><td style="padding:8px;color:#ffd700">🥇 P1</td><td style="padding:8px">25 pts</td><td style="padding:8px;color:#888">12.5 pts</td></tr>
+              <tr><td style="padding:8px;color:#c0c0c0">🥈 P2</td><td style="padding:8px">18 pts</td><td style="padding:8px;color:#888">9 pts</td></tr>
+              <tr><td style="padding:8px;color:#cd7f32">🥉 P3</td><td style="padding:8px">15 pts</td><td style="padding:8px;color:#888">7.5 pts</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div style="background:#0f0f13;border-radius:10px;padding:14px;font-size:0.85rem;line-height:1.8;border:1px solid #2a2a3a;">
+        <p style="margin-bottom:8px">✅ <strong>Exact match</strong> — you predicted a driver in the correct position, you get the full points for that position.</p>
+        <p style="margin-bottom:8px">🔁 <strong>One position off</strong> — you predicted a driver one place out (e.g. predicted P1, they finished P2), you get <strong>half</strong> the points for where they actually finished.</p>
+        <p>❌ <strong>Two or more positions off</strong> — no points. If a driver doesn't finish in the top 3 at all, no points either.</p>
+      </div>
+      <div style="background:#1a1a2a;border-radius:10px;padding:14px;font-size:0.85rem;margin-top:12px;border:1px solid #2a2a3a;color:#aaa;">
+        💡 <strong>Example:</strong> You predict Hamilton for P1 in the race. He finishes P2. You get half of the P2 points — <strong>9 points</strong>.
+      </div>
+    </div>
+  </div>
   <div id="leaderboardTab" class="hidden">
     <div class="card">
       <h2>Season Standings</h2>
@@ -259,7 +301,7 @@ async function sbUpsert(path, body) {
 }
 
 function showTab(tab, btn) {
-  ['enter','stats','leaderboard'].forEach(t => document.getElementById(t+'Tab').classList.add('hidden'));
+  ['enter','stats','leaderboard','scoring'].forEach(t => document.getElementById(t+'Tab').classList.add('hidden'));
   document.getElementById(tab+'Tab').classList.remove('hidden');
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -312,6 +354,8 @@ async function onRaceChange() {
     raceStatus.className = 'status-msg success';
     raceStatus.textContent = `✅ ${race.raceName} loaded`;
     setTimeout(() => raceStatus.classList.add('hidden'), 3000);
+    document.getElementById('predictionsCard').classList.remove('hidden');
+    document.getElementById('noRaceMsg').classList.add('hidden');
     renderPredGrid();
     loadExistingPredictions();
     loadExistingResults();
