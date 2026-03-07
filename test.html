@@ -397,24 +397,36 @@ async function publishResults() {
 // ---- WHATSAPP (inline in Results tab) ----
 async function generateMessage() {
   if (!previewData) return;
-  const { season, round, raceName, raceId, preds } = previewData;
+  const { season, round, raceName, raceId, qTop3, rTop3, preds, hasQual, hasRace } = previewData;
   const status = document.getElementById('waStatus');
   const preview = document.getElementById('waPreview');
   preview.classList.add('hidden');
   status.className='status-msg info'; status.textContent='⏳ Gathering data...'; status.classList.remove('hidden');
 
   try {
-    const [scores, allSeasonRaces] = await Promise.all([
-      sbGet(`scores?race_id=eq.${raceId}&order=total_score.desc`),
-      sbGet(`races?season=eq.${season}&order=round.asc`)
-    ]);
-    if (!scores.length) throw new Error('No scores found — publish results first');
+    // Calculate scores from previewData directly — no need to have published first
+    const scores = PLAYERS.map(player => {
+      const p = preds.find(x => x.player_name === player);
+      const qPreds = p ? [p.quali_p1,p.quali_p2,p.quali_p3] : [null,null,null];
+      const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
+      const qs = hasQual ? calcScore(qPreds, qTop3, QUALI_PTS) : 0;
+      const rs = hasRace ? calcScore(rPreds, rTop3, RACE_PTS)  : 0;
+      return { player_name:player, quali_score:qs, race_score:rs, total_score:qs+rs };
+    }).sort((a,b) => b.total_score - a.total_score);
 
+    const allSeasonRaces = await sbGet(`races?season=eq.${season}&order=round.asc`);
+
+    // Season totals — pull published scores from DB and layer this race's live scores on top
     const allIds = allSeasonRaces.map(r=>r.id).join(',');
     const allScores = await sbGet(`scores?race_id=in.(${allIds})`);
     const seasonTotals = {};
     PLAYERS.forEach(p => seasonTotals[p] = 0);
-    allScores.forEach(s => { if (seasonTotals[s.player_name]!==undefined) seasonTotals[s.player_name]+=s.total_score; });
+    // Add all previously published scores except this race (we'll use live calc instead)
+    allScores.filter(s => s.race_id !== raceId).forEach(s => {
+      if (seasonTotals[s.player_name]!==undefined) seasonTotals[s.player_name]+=s.total_score;
+    });
+    // Add this race's live-calculated scores
+    scores.forEach(s => { if (seasonTotals[s.player_name]!==undefined) seasonTotals[s.player_name]+=s.total_score; });
     const leaderboard = Object.entries(seasonTotals).sort((a,b)=>b[1]-a[1]);
 
     const prevRaces = allSeasonRaces.filter(r=>r.round<parseInt(round));
@@ -436,15 +448,9 @@ async function generateMessage() {
 
     const zeroScorers = scores.filter(s=>s.total_score===0).map(s=>s.player_name);
 
-    status.textContent='⏳ Fetching race data...';
-    const [qRes, rRes, flRes] = await Promise.all([
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`),
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`),
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/fastest/1/`)
-    ]);
-    const qData=await qRes.json(), rData=await rRes.json(), flData=await flRes.json();
-    const qTop3=qData.MRData.RaceTable.Races[0]?.QualifyingResults?.slice(0,3).map(d=>d.Driver.familyName)||[];
-    const rTop3=rData.MRData.RaceTable.Races[0]?.Results?.slice(0,3).map(d=>d.Driver.familyName)||[];
+    status.textContent='⏳ Fetching fastest lap...';
+    const flRes = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/fastest/1/`);
+    const flData = await flRes.json();
     const fastestLap=flData.MRData.RaceTable.Races[0]?.Results?.[0];
     const fastestLapStr=fastestLap?`${fastestLap.Driver.familyName} (${fastestLap.FastestLap.Time.time})`:null;
 
