@@ -67,7 +67,7 @@
 <body>
 
 <h1>🔧 NigeBot Man Cave</h1>
-<p class="subtitle">Admin tools — v1.0.3</p>
+<p class="subtitle">Admin tools — v1.0.8</p>
 
 <div class="tabs">
   <button class="tab active" onclick="showTab('tests',this)">🧪 Tests</button>
@@ -77,22 +77,6 @@
 <!-- TESTS TAB -->
 <div id="testsTab">
   <div class="config-row">
-    <div>
-      <label>Season</label>
-      <select id="cfgSeason">
-        <option value="2026">2026</option>
-        <option value="2027">2027</option>
-        <option value="2028">2028</option>
-      </select>
-    </div>
-    <div>
-      <label>Round (for API tests)</label>
-      <select id="cfgRound">
-        <option value="1">Round 1 — Australia</option>
-        <option value="2">Round 2 — China</option>
-        <option value="3">Round 3 — Japan</option>
-      </select>
-    </div>
     <button class="btn" onclick="runAll()">▶ Run All Tests</button>
   </div>
 
@@ -105,6 +89,44 @@
   </div>
 
   <div id="testGroups"></div>
+</div>
+
+<!-- WHATSAPP TAB -->
+<div id="whatsappTab" class="hidden">
+  <div class="card">
+    <h2>Generate WhatsApp Message</h2>
+    <div class="config-row">
+      <div>
+        <label>Season</label>
+        <select id="waSeason">
+          <option value="2026">2026</option>
+          <option value="2027">2027</option>
+          <option value="2028">2028</option>
+        </select>
+      </div>
+      <div>
+        <label>Round</label>
+        <select id="waRound"><option value="">— loading —</option></select>
+      </div>
+    </div>
+    <label class="config-row" style="display:block;margin-bottom:6px;font-size:0.72rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Extra context (optional)</label>
+    <textarea id="waContext" placeholder="e.g. Ollie was at the race in Melbourne. Verstappen had a nightmare in qualifying and started P17..." style="width:100%;background:#0f0f13;border:1px solid #3a3a4a;border-radius:8px;padding:10px 12px;color:#f0f0f0;font-size:0.85rem;line-height:1.5;height:80px;resize:vertical;font-family:'Segoe UI',sans-serif;margin-bottom:12px;"></textarea>
+    <button class="btn" onclick="generateMessage()">💬 Generate Message</button>
+    <div id="waStatus" class="status-msg hidden"></div>
+  </div>
+
+  <div id="waPreview" class="hidden">
+    <div class="card">
+      <h2>Generated Message</h2>
+      <p style="color:#888;font-size:0.78rem;margin-bottom:10px;">Edit before sending if needed.</p>
+      <textarea id="waText" style="width:100%;background:#0f0f13;border:1px solid #3a3a4a;border-radius:8px;padding:12px;color:#f0f0f0;font-size:0.88rem;line-height:1.6;min-height:320px;resize:vertical;font-family:'Segoe UI',sans-serif;"></textarea>
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <button class="btn" style="flex:1" onclick="copyMessage()">📋 Copy to Clipboard</button>
+        <button class="btn" style="flex:1;background:#2a2a3a" onclick="generateMessage()">🔄 Regenerate</button>
+      </div>
+      <div id="copyConfirm" class="status-msg success hidden">✅ Copied!</div>
+    </div>
+  </div>
 </div>
 
 <!-- RESULTS TAB -->
@@ -122,11 +144,7 @@
       </div>
       <div>
         <label>Round</label>
-        <select id="resRound">
-          <option value="1">Round 1 — Australia</option>
-          <option value="2">Round 2 — China</option>
-          <option value="3">Round 3 — Japan</option>
-        </select>
+        <select id="resRound"><option value="">— loading —</option></select>
       </div>
       <button class="btn" onclick="fetchPreview()">🔄 Fetch Results</button>
     </div>
@@ -218,11 +236,146 @@ async function sbUpsert(path, body) {
 }
 
 function showTab(tab, btn) {
-  document.getElementById('testsTab').classList.toggle('hidden', tab !== 'tests');
-  document.getElementById('resultsTab').classList.toggle('hidden', tab !== 'results');
+  ['tests','results','whatsapp'].forEach(t => document.getElementById(t+'Tab').classList.toggle('hidden', t !== tab));
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  if (tab === 'results') loadLastPublished();
+  if (tab === 'results') { loadLastPublished(); loadResRounds(); }
+  if (tab === 'whatsapp') loadWaRounds();
+}
+
+// ---- WHATSAPP TAB ----
+
+async function loadWaRounds() {
+  const season = document.getElementById('waSeason').value;
+  const sel = document.getElementById('waRound');
+  sel.innerHTML = '<option value="">— loading —</option>';
+  try {
+    const races = await sbGet(`races?season=eq.${season}&order=round.asc`);
+    sel.innerHTML = races.length
+      ? races.map(r => `<option value="${r.round}" data-name="${r.name}">${r.round}. ${r.name}</option>`).join('')
+      : '<option value="">No races found</option>';
+  } catch(e) { sel.innerHTML = '<option value="">Failed to load</option>'; }
+}
+
+async function generateMessage() {
+  const season = document.getElementById('waSeason').value;
+  const roundSel = document.getElementById('waRound');
+  const round = roundSel.value;
+  const raceName = roundSel.selectedOptions[0]?.dataset.name || `Round ${round}`;
+  const status = document.getElementById('waStatus');
+  const preview = document.getElementById('waPreview');
+  preview.classList.add('hidden');
+  if (!round) { status.className='status-msg error'; status.textContent='Select a round first.'; status.classList.remove('hidden'); return; }
+  status.className='status-msg info'; status.textContent='⏳ Gathering data...'; status.classList.remove('hidden');
+
+  try {
+    // 1. Get scores from Supabase
+    const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
+    const raceId = raceRows?.[0]?.id;
+    if (!raceId) throw new Error('Race not found in DB');
+    const [scores, allSeasonRaces] = await Promise.all([
+      sbGet(`scores?race_id=eq.${raceId}&order=total_score.desc`),
+      sbGet(`races?season=eq.${season}&order=round.asc`)
+    ]);
+    if (!scores.length) throw new Error('No scores found — publish results first');
+
+    // Season leaderboard
+    const allIds = allSeasonRaces.map(r => r.id).join(',');
+    const allScores = await sbGet(`scores?race_id=in.(${allIds})`);
+    const seasonTotals = {};
+    PLAYERS.forEach(p => seasonTotals[p] = 0);
+    allScores.forEach(s => { if (seasonTotals[s.player_name] !== undefined) seasonTotals[s.player_name] += s.total_score; });
+    const leaderboard = Object.entries(seasonTotals).sort((a,b) => b[1]-a[1]);
+
+    // Biggest mover — compare previous round scores to current
+    const prevRaces = allSeasonRaces.filter(r => r.round < parseInt(round));
+    let biggestMover = null;
+    if (prevRaces.length) {
+      const prevIds = prevRaces.map(r => r.id).join(',');
+      const prevScores = await sbGet(`scores?race_id=in.(${prevIds})`);
+      const prevTotals = {};
+      PLAYERS.forEach(p => prevTotals[p] = 0);
+      prevScores.forEach(s => { if (prevTotals[s.player_name] !== undefined) prevTotals[s.player_name] += s.total_score; });
+      const prevRanks = Object.entries(prevTotals).sort((a,b) => b[1]-a[1]).map(([p],i) => ({p, rank: i+1}));
+      const newRanks  = leaderboard.map(([p],i) => ({p, rank: i+1}));
+      let maxMove = 0;
+      newRanks.forEach(({p, rank}) => {
+        const prev = prevRanks.find(x => x.p === p);
+        if (prev && (prev.rank - rank) > maxMove) { maxMove = prev.rank - rank; biggestMover = {name: p, places: maxMove}; }
+      });
+    }
+
+    // Who scored zero
+    const zeroScorers = scores.filter(s => s.total_score === 0).map(s => s.player_name);
+
+    // 2. Get Jolpica data — top 3 + fastest lap
+    status.textContent = '⏳ Fetching race data...';
+    const [qRes, rRes, flRes] = await Promise.all([
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`),
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`),
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/fastest/1/`)
+    ]);
+    const qData = await qRes.json(), rData = await rRes.json(), flData = await flRes.json();
+    const qTop3 = qData.MRData.RaceTable.Races[0]?.QualifyingResults?.slice(0,3).map(d => d.Driver.familyName) || [];
+    const rTop3 = rData.MRData.RaceTable.Races[0]?.Results?.slice(0,3).map(d => d.Driver.familyName) || [];
+    const fastestLap = flData.MRData.RaceTable.Races[0]?.Results?.[0];
+    const fastestLapStr = fastestLap ? `${fastestLap.Driver.familyName} (${fastestLap.FastestLap.Time.time})` : null;
+
+    // 3. Get custom context from admin
+    const extraContext = document.getElementById('waContext').value.trim();
+
+    // 4. Call Claude API
+    status.textContent = '⏳ Generating message...';
+    const prompt = `You are NigeBot, the F1 predictions tracker for a group of mates called the Park Estate group. Write a WhatsApp message announcing the results of the ${raceName} ${season} prediction game.
+
+Tone: dry British banter, wicked but harmless sense of humour. Occasionally take a gentle dig at Max Verstappen but not every time. Keep it punchy — this is a WhatsApp message, not an essay. Use emojis sparingly but effectively.
+
+Race data:
+- Qualifying top 3: ${qTop3.join(', ') || 'unavailable'}
+- Race top 3: ${rTop3.join(', ') || 'unavailable'}
+- Fastest lap: ${fastestLapStr || 'unavailable'}
+${extraContext ? `\nExtra context from the admin (weave this in naturally):\n${extraContext}` : ''}
+
+Prediction scores this round (ordered by score):
+${scores.map((s,i) => `${i+1}. ${s.player_name} — ${s.total_score} pts (Quali: ${s.quali_score}, Race: ${s.race_score})`).join('\n')}
+
+Season leaderboard after this round:
+${leaderboard.map(([p,t],i) => `${i+1}. ${p} — ${t} pts`).join('\n')}
+
+Additional context:
+${biggestMover ? `- Biggest mover: ${biggestMover.name} moved up ${biggestMover.places} place${biggestMover.places>1?'s':''} in the standings` : '- No significant position changes this round'}
+${zeroScorers.length ? `- Scored zero points: ${zeroScorers.join(', ')}` : '- Everyone scored points this round'}
+
+Include: a brief nod to the race itself, round scores with a comment on the winner, a dig at anyone who scored zero, the biggest mover if relevant, the fastest lap, and the season standings. End with the NigeBot link: boxteqist.github.io/nigebot`;
+
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const apiData = await apiRes.json();
+    const message = apiData.content?.[0]?.text;
+    if (!message) throw new Error('No message returned from Claude');
+
+    document.getElementById('waText').value = message;
+    preview.classList.remove('hidden');
+    status.className = 'status-msg success'; status.textContent = '✅ Message generated!';
+  } catch(e) {
+    status.className = 'status-msg error'; status.textContent = `❌ ${e.message}`;
+  }
+}
+
+function copyMessage() {
+  const text = document.getElementById('waText').value;
+  navigator.clipboard.writeText(text).then(() => {
+    const el = document.getElementById('copyConfirm');
+    el.classList.remove('hidden');
+    setTimeout(() => el.classList.add('hidden'), 3000);
+  });
 }
 
 // ---- RESULTS TAB ----
@@ -243,9 +396,22 @@ async function loadLastPublished() {
   }
 }
 
+async function loadResRounds() {
+  const season = document.getElementById('resSeason').value;
+  const sel = document.getElementById('resRound');
+  sel.innerHTML = '<option value="">— loading —</option>';
+  try {
+    const races = await sbGet(`races?season=eq.${season}&order=round.asc`);
+    sel.innerHTML = races.length
+      ? races.map(r => `<option value="${r.round}">${r.round}. ${r.name}</option>`).join('')
+      : '<option value="">No races found</option>';
+  } catch(e) { sel.innerHTML = '<option value="">Failed to load</option>'; }
+}
+
 async function fetchPreview() {
   const season = document.getElementById('resSeason').value;
   const round  = document.getElementById('resRound').value;
+  if (!round) { msg.className='status-msg error'; msg.textContent='Select a round first.'; msg.classList.remove('hidden'); return; }
   const msg    = document.getElementById('fetchMsg');
   const section = document.getElementById('previewSection');
   section.classList.add('hidden');
@@ -356,6 +522,51 @@ async function publishResults() {
 // ---- TESTS TAB ----
 const testGroups = [
   {
+    name: 'F1 API — Jolpica',
+    tests: [
+      { name: 'Qualifying results available', detail: 'Fetches qualifying top 3 for the latest race in DB',
+        run: async () => {
+          const races = await sbGet('races?order=round.asc');
+          if (!races.length) throw new Error('No races in DB');
+          const latest = races[races.length - 1];
+          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${latest.season}/${latest.round}/qualifying/`);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const data = await r.json();
+          const race = data.MRData.RaceTable.Races[0];
+          if (!race) throw new Error(`No data returned for ${latest.name} — results may not be published yet`);
+          const top3 = race.QualifyingResults.slice(0,3).map(d => d.Driver.familyName);
+          if (top3.length < 3) throw new Error(`Only ${top3.length} results returned`);
+          return `${latest.name}: P1: ${top3[0]}, P2: ${top3[1]}, P3: ${top3[2]}`;
+        }},
+      { name: 'Race results available', detail: 'Fetches race top 3 for the latest race in DB',
+        run: async () => {
+          const races = await sbGet('races?order=round.asc');
+          if (!races.length) throw new Error('No races in DB');
+          const latest = races[races.length - 1];
+          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${latest.season}/${latest.round}/results/`);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const data = await r.json();
+          const race = data.MRData.RaceTable.Races[0];
+          if (!race) throw new Error(`No data returned for ${latest.name} — results may not be published yet`);
+          const top3 = race.Results.slice(0,3).map(d => d.Driver.familyName);
+          if (top3.length < 3) throw new Error(`Only ${top3.length} results returned`);
+          return `${latest.name}: P1: ${top3[0]}, P2: ${top3[1]}, P3: ${top3[2]}`;
+        }},
+      { name: 'Season schedule reachable', detail: 'Fetches the full season calendar for the latest season in DB',
+        run: async () => {
+          const races = await sbGet('races?order=round.asc');
+          if (!races.length) throw new Error('No races in DB');
+          const season = races[races.length - 1].season;
+          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/`);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const data = await r.json();
+          const count = data.MRData.RaceTable.Races.length;
+          if (!count) throw new Error('No races returned');
+          return `${season}: ${count} races found`;
+        }},
+    ]
+  },
+  {
     name: 'Scoring Logic',
     tests: [
       { name: 'Exact match — Race P1', detail: 'Predict Verstappen P1, he finishes P1 → 25pts',
@@ -417,45 +628,6 @@ const testGroups = [
         }},
     ]
   },
-  {
-    name: 'F1 API — Jolpica',
-    tests: [
-      { name: 'Qualifying results available', detail: 'Fetches qualifying top 3 for selected season/round',
-        run: async () => {
-          const season = document.getElementById('cfgSeason').value, round = document.getElementById('cfgRound').value;
-          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`);
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const data = await r.json();
-          const race = data.MRData.RaceTable.Races[0];
-          if (!race) throw new Error('No data returned — results may not be published yet');
-          const top3 = race.QualifyingResults.slice(0,3).map(d => d.Driver.familyName);
-          if (top3.length < 3) throw new Error(`Only ${top3.length} results returned`);
-          return `P1: ${top3[0]}, P2: ${top3[1]}, P3: ${top3[2]}`;
-        }},
-      { name: 'Race results available', detail: 'Fetches race top 3 for selected season/round',
-        run: async () => {
-          const season = document.getElementById('cfgSeason').value, round = document.getElementById('cfgRound').value;
-          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`);
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const data = await r.json();
-          const race = data.MRData.RaceTable.Races[0];
-          if (!race) throw new Error('No data returned — results may not be published yet');
-          const top3 = race.Results.slice(0,3).map(d => d.Driver.familyName);
-          if (top3.length < 3) throw new Error(`Only ${top3.length} results returned`);
-          return `P1: ${top3[0]}, P2: ${top3[1]}, P3: ${top3[2]}`;
-        }},
-      { name: 'Season schedule reachable', detail: 'Fetches the full season calendar',
-        run: async () => {
-          const season = document.getElementById('cfgSeason').value;
-          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/`);
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const data = await r.json();
-          const count = data.MRData.RaceTable.Races.length;
-          if (!count) throw new Error('No races returned');
-          return `${count} races found`;
-        }},
-    ]
-  }
 ];
 
 function renderGroups() {
