@@ -1,5 +1,4 @@
 # NigeBot 🏁
-
 **Park Estate F1 Predictions Tracker**
 
 NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race weekend, players predict the top 3 in qualifying and the top 3 in the race. Points are awarded for exact and near-miss predictions. Results are published after the race by an admin.
@@ -34,11 +33,11 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 
 ### For Admins (Tim & Ollie)
 1. Open Man Cave after the race weekend
-2. Go to **Tests** tab and run all tests — confirm Jolpica API is green
+2. Go to **Tests** tab and run all tests — confirm Jolpica API is green and check which rounds have results available
 3. Go to **Results** tab — select the season and round
 4. Hit **Fetch Results** and review the score preview for all players
-5. If everything looks correct, hit **Publish** — scores go live in NigeBot instantly
-6. Share the leaderboard link in the WhatsApp group
+5. If everything looks correct, hit **Publish Results to NigeBot** — the button turns amber when ready, green once published with a timestamp
+6. Generate the WhatsApp message using the section below the score preview — edit if needed, copy and send
 
 ---
 
@@ -81,8 +80,21 @@ Points are awarded for predicting the top 3 in qualifying and the race.
 
 ---
 
+## Man Cave Test Suite
+
+The Tests tab runs a suite of checks across four groups:
+
+- **F1 API — Jolpica** — confirms the API is reachable using a known historical race, checks the season schedule, and reports results availability for every round that has predictions entered (per-round status shown in the detail)
+- **Scoring Logic** — unit tests for exact matches, near-misses, driver code resolution, and full prediction scenarios
+- **Supabase Connection** — confirms read access to all five database tables
+- **Prediction Save & Update** — writes, updates, reads back, and cleans up a test prediction row
+
+---
+
 ## Driver Codes
 
 Predictions must be entered as 3-letter codes:
 
 `VER` `NOR` `LEC` `PIA` `HAM` `RUS` `ANT` `ALO` `STR` `GAS` `HUL` `TSU` `LAW` `ALB` `BEA` `HAD` `DOO` `BOR` `COL`
+
+> For reserve drivers not in the standard list, use the driver's full surname instead of a code.
