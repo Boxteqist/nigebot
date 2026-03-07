@@ -540,21 +540,42 @@ async function loadStats() {
 }
 
 async function loadLeaderboard() {
-  const season=document.getElementById('seasonSel').value;
-  const races=await sbGet(`races?season=eq.${season}&order=round.asc`);
-  if(!races.length){document.getElementById('leaderboard').innerHTML='<p style="color:#888;font-size:0.85rem;">No races scored yet.</p>';return;}
-  const ids=races.map(r=>r.id).join(',');
-  const scores=await sbGet(`scores?race_id=in.(${ids})`);
-  const totals={};
-  PLAYERS.forEach(p=>totals[p]={q:0,r:0,t:0});
-  scores.forEach(s=>{if(totals[s.player_name]){totals[s.player_name].q+=s.quali_score;totals[s.player_name].r+=s.race_score;totals[s.player_name].t+=s.total_score;}});
-  const sorted=Object.entries(totals).sort((a,b)=>b[1].t-a[1].t);
-  const medals=['🥇','🥈','🥉'];
-  document.getElementById('leaderboard').innerHTML=`<table class="data-table"><thead><tr><th>#</th><th>Player</th><th>Quali</th><th>Race</th><th>Total</th></tr></thead><tbody>${sorted.map(([name,s],i)=>`<tr><td>${medals[i]||i+1}</td><td><strong>${name}</strong></td><td>${s.q}</td><td>${s.r}</td><td>${s.t}</td></tr>`).join('')}</tbody></table>`;
-  if(currentRaceId){
-    const rs=scores.filter(s=>s.race_id===currentRaceId).sort((a,b)=>b.total_score-a.total_score);
-    document.getElementById('raceBreakdown').innerHTML=rs.length?`<table class="data-table"><thead><tr><th>#</th><th>Player</th><th>Quali</th><th>Race</th><th>Total</th></tr></thead><tbody>${rs.map((s,i)=>`<tr><td>${medals[i]||i+1}</td><td><strong>${s.player_name}</strong></td><td>${s.quali_score}</td><td>${s.race_score}</td><td>${s.total_score}</td></tr>`).join('')}</tbody></table>`:'<p style="color:#888;font-size:0.85rem;">No scores yet for this race.</p>';
-  }
+  const season = document.getElementById('seasonSel').value;
+  const races = await sbGet(`races?season=eq.${season}&order=round.asc`);
+  if (!races.length) { document.getElementById('leaderboard').innerHTML='<p style="color:#888;font-size:0.85rem;">No races scored yet.</p>'; return; }
+  const ids = races.map(r=>r.id).join(',');
+  const scores = await sbGet(`scores?race_id=in.(${ids})`);
+  const totals = {};
+  PLAYERS.forEach(p => totals[p] = {q:0,r:0,t:0});
+  scores.forEach(s => { if(totals[s.player_name]) { totals[s.player_name].q+=s.quali_score; totals[s.player_name].r+=s.race_score; totals[s.player_name].t+=s.total_score; }});
+  const sorted = Object.entries(totals).sort((a,b)=>b[1].t-a[1].t);
+  const medals = ['🥇','🥈','🥉'];
+  document.getElementById('leaderboard').innerHTML = `
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Player</th><th>Quali</th><th>Race</th><th>Total</th></tr></thead>
+      <tbody>${sorted.map(([name,s],i)=>`<tr><td>${medals[i]||i+1}</td><td><strong>${name}</strong></td><td>${s.q}</td><td>${s.r}</td><td>${s.t}</td></tr>`).join('')}</tbody>
+    </table>`;
+
+  // populate breakdown dropdown with scored races
+  const sel = document.getElementById('breakdownRaceSel');
+  const scoredRaceIds = [...new Set(scores.map(s=>s.race_id))];
+  const scoredRaces = races.filter(r => scoredRaceIds.includes(r.id));
+  sel.innerHTML = '<option value="">— select a race —</option>' + scoredRaces.map(r =>
+    `<option value="${r.id}">${r.round}. ${r.name}</option>`).join('');
+}
+
+async function loadRaceBreakdown() {
+  const raceId = document.getElementById('breakdownRaceSel').value;
+  if (!raceId) return;
+  const season = document.getElementById('seasonSel').value;
+  const scores = await sbGet(`scores?race_id=eq.${raceId}`);
+  const medals = ['🥇','🥈','🥉'];
+  const sorted = scores.sort((a,b) => b.total_score - a.total_score);
+  document.getElementById('raceBreakdown').innerHTML = sorted.length ? `
+    <table class="data-table">
+      <thead><tr><th>#</th><th>Player</th><th>Quali</th><th>Race</th><th>Total</th></tr></thead>
+      <tbody>${sorted.map((s,i)=>`<tr><td>${medals[i]||i+1}</td><td><strong>${s.player_name}</strong></td><td>${s.quali_score}</td><td>${s.race_score}</td><td>${s.total_score}</td></tr>`).join('')}</tbody>
+    </table>` : '<p style="color:#888;font-size:0.85rem;">No scores yet for this race.</p>';
 }
 
 function norm(s){ if(!s)return''; const up=s.trim().toUpperCase(); if(DRIVER_CODES[up])return DRIVER_CODES[up].toLowerCase(); return s.trim().toLowerCase(); }
