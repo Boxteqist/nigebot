@@ -75,7 +75,7 @@
 <body>
 
 <h1>🔧 NigeBot Man Cave</h1>
-<p class="subtitle">Admin tools — v1.2.1</p>
+<p class="subtitle">Admin tools — v1.2.2</p>
 
 <div class="tabs">
   <button class="tab active" onclick="showTab('tests',this)">🧪 Tests</button>
@@ -140,7 +140,7 @@
       <h2>Score Preview</h2>
       <div class="preview-grid" id="previewGrid"></div>
       <div class="publish-row">
-        <button class="btn" id="publishBtn" onclick="publishResults()" disabled>✅ Publish Results to NigeBot</button>
+        <button class="btn" id="publishBtn" onclick="publishResults()" disabled>🔒 Publish Results to NigeBot</button>
         <div class="last-published" id="lastPublished"></div>
       </div>
       <div id="publishMsg" class="status-msg hidden"></div>
@@ -481,7 +481,11 @@ Include: a brief nod to the race itself, round scores with a comment on the winn
 
     const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] })
     });
     const apiData = await apiRes.json();
