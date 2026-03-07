@@ -67,7 +67,7 @@
 <body>
 
 <h1>🔧 NigeBot Man Cave</h1>
-<p class="subtitle">Admin tools — v1.0.2</p>
+<p class="subtitle">Admin tools — v1.0.3</p>
 
 <div class="tabs">
   <button class="tab active" onclick="showTab('tests',this)">🧪 Tests</button>
@@ -254,8 +254,8 @@ async function fetchPreview() {
 
   try {
     const [qRes, rRes] = await Promise.all([
-      fetch(`https://api.jolpica.com/ergast/v1/f1/${season}/${round}/qualifying.json`),
-      fetch(`https://api.jolpica.com/ergast/v1/f1/${season}/${round}/results.json`)
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`),
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`)
     ]);
     const qData = await qRes.json(), rData = await rRes.json();
     const qRace = qData.MRData.RaceTable.Races[0], rRace = rData.MRData.RaceTable.Races[0];
@@ -423,7 +423,7 @@ const testGroups = [
       { name: 'Qualifying results available', detail: 'Fetches qualifying top 3 for selected season/round',
         run: async () => {
           const season = document.getElementById('cfgSeason').value, round = document.getElementById('cfgRound').value;
-          const r = await fetch(`https://api.jolpica.com/ergast/v1/f1/${season}/${round}/qualifying.json`);
+          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
           const race = data.MRData.RaceTable.Races[0];
@@ -435,7 +435,7 @@ const testGroups = [
       { name: 'Race results available', detail: 'Fetches race top 3 for selected season/round',
         run: async () => {
           const season = document.getElementById('cfgSeason').value, round = document.getElementById('cfgRound').value;
-          const r = await fetch(`https://api.jolpica.com/ergast/v1/f1/${season}/${round}/results.json`);
+          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
           const race = data.MRData.RaceTable.Races[0];
@@ -447,7 +447,7 @@ const testGroups = [
       { name: 'Season schedule reachable', detail: 'Fetches the full season calendar',
         run: async () => {
           const season = document.getElementById('cfgSeason').value;
-          const r = await fetch(`https://api.jolpica.com/ergast/v1/f1/${season}.json`);
+          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
           const count = data.MRData.RaceTable.Races.length;
