@@ -104,7 +104,7 @@
     <h1>NigeBot</h1>
     <span>Park Estate F1 Predictions</span>
   </div>
-  <div style="font-size:0.75rem;color:rgba(255,255,255,0.6);align-self:flex-end;padding-bottom:2px;">v1.0.8</div>
+  <div style="font-size:0.75rem;color:rgba(255,255,255,0.6);align-self:flex-end;padding-bottom:2px;">v1.0.9</div>
 </header>
 
 <div class="container">
@@ -354,7 +354,7 @@ async function loadRaces() {
     return;
   }
   try {
-    const res = await fetch(`https://api.jolpica.com/ergast/v1/f1/${season}.json`);
+    const res = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/`);
     const data = await res.json();
     allRaces = data.MRData.RaceTable.Races;
     sel.innerHTML = '<option value="">— select race —</option>' + allRaces.map(r =>
@@ -494,8 +494,8 @@ async function fetchAndScore() {
   showStatus('fetchStatus','info','⏳ Fetching F1 results...');
   try {
     const [qRes,rRes] = await Promise.all([
-      fetch(`https://api.jolpica.com/ergast/v1/f1/${season}/${round}/qualifying.json`),
-      fetch(`https://api.jolpica.com/ergast/v1/f1/${season}/${round}/results.json`)
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`),
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`)
     ]);
     const qData=await qRes.json(), rData=await rRes.json();
     const qRace=qData.MRData.RaceTable.Races[0], rRace=rData.MRData.RaceTable.Races[0];
