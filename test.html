@@ -17,11 +17,17 @@
   .btn:disabled { background: #444; cursor: not-allowed; }
   .btn.green { background: #2a6a2a; }
   .btn.green:hover { background: #1a5a1a; }
+  .btn.grey { background: #2a2a3a; }
+  .btn.grey:hover { background: #3a3a4a; }
   .card { background: #1a1a24; border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a3a; }
   .card h2 { font-size: 0.85rem; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
   .config-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
   .config-row label { font-size: 0.72rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px; }
   .config-row select { background: #0f0f13; border: 1px solid #3a3a4a; border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 0.88rem; }
+  .field-label { font-size: 0.72rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
+  select { background: #0f0f13; border: 1px solid #3a3a4a; border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 0.88rem; }
+  textarea { background: #0f0f13; border: 1px solid #3a3a4a; border-radius: 8px; padding: 10px 12px; color: #f0f0f0; font-size: 0.85rem; line-height: 1.5; font-family: 'Segoe UI', sans-serif; width: 100%; resize: vertical; }
+  textarea:focus, select:focus { outline: none; border-color: #e10600; }
   .test { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1a1a24; font-size: 0.88rem; }
   .test:last-child { border-bottom: none; }
   .test-icon { font-size: 1rem; margin-top: 1px; min-width: 20px; }
@@ -67,11 +73,12 @@
 <body>
 
 <h1>🔧 NigeBot Man Cave</h1>
-<p class="subtitle">Admin tools — v1.0.8</p>
+<p class="subtitle">Admin tools — v1.0.9</p>
 
 <div class="tabs">
   <button class="tab active" onclick="showTab('tests',this)">🧪 Tests</button>
   <button class="tab" onclick="showTab('results',this)">📊 Results</button>
+  <button class="tab" onclick="showTab('whatsapp',this)">💬 WhatsApp</button>
 </div>
 
 <!-- TESTS TAB -->
@@ -79,54 +86,13 @@
   <div class="config-row">
     <button class="btn" onclick="runAll()">▶ Run All Tests</button>
   </div>
-
   <div class="progress"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
-
   <div class="summary">
     <div><div class="summary-num pending" id="passCount">—</div><div style="font-size:0.75rem;color:#888;text-transform:uppercase">Passed</div></div>
     <div><div class="summary-num fail" id="failCount">—</div><div style="font-size:0.75rem;color:#888;text-transform:uppercase">Failed</div></div>
     <div><div class="summary-num pending" id="pendingCount">—</div><div style="font-size:0.75rem;color:#888;text-transform:uppercase">Pending</div></div>
   </div>
-
   <div id="testGroups"></div>
-</div>
-
-<!-- WHATSAPP TAB -->
-<div id="whatsappTab" class="hidden">
-  <div class="card">
-    <h2>Generate WhatsApp Message</h2>
-    <div class="config-row">
-      <div>
-        <label>Season</label>
-        <select id="waSeason">
-          <option value="2026">2026</option>
-          <option value="2027">2027</option>
-          <option value="2028">2028</option>
-        </select>
-      </div>
-      <div>
-        <label>Round</label>
-        <select id="waRound"><option value="">— loading —</option></select>
-      </div>
-    </div>
-    <label class="config-row" style="display:block;margin-bottom:6px;font-size:0.72rem;color:#888;text-transform:uppercase;letter-spacing:0.5px;">Extra context (optional)</label>
-    <textarea id="waContext" placeholder="e.g. Ollie was at the race in Melbourne. Verstappen had a nightmare in qualifying and started P17..." style="width:100%;background:#0f0f13;border:1px solid #3a3a4a;border-radius:8px;padding:10px 12px;color:#f0f0f0;font-size:0.85rem;line-height:1.5;height:80px;resize:vertical;font-family:'Segoe UI',sans-serif;margin-bottom:12px;"></textarea>
-    <button class="btn" onclick="generateMessage()">💬 Generate Message</button>
-    <div id="waStatus" class="status-msg hidden"></div>
-  </div>
-
-  <div id="waPreview" class="hidden">
-    <div class="card">
-      <h2>Generated Message</h2>
-      <p style="color:#888;font-size:0.78rem;margin-bottom:10px;">Edit before sending if needed.</p>
-      <textarea id="waText" style="width:100%;background:#0f0f13;border:1px solid #3a3a4a;border-radius:8px;padding:12px;color:#f0f0f0;font-size:0.88rem;line-height:1.6;min-height:320px;resize:vertical;font-family:'Segoe UI',sans-serif;"></textarea>
-      <div style="display:flex;gap:10px;margin-top:12px;">
-        <button class="btn" style="flex:1" onclick="copyMessage()">📋 Copy to Clipboard</button>
-        <button class="btn" style="flex:1;background:#2a2a3a" onclick="generateMessage()">🔄 Regenerate</button>
-      </div>
-      <div id="copyConfirm" class="status-msg success hidden">✅ Copied!</div>
-    </div>
-  </div>
 </div>
 
 <!-- RESULTS TAB -->
@@ -135,7 +101,7 @@
     <h2>Fetch & Preview</h2>
     <div class="config-row">
       <div>
-        <label>Season</label>
+        <label class="field-label">Season</label>
         <select id="resSeason">
           <option value="2026">2026</option>
           <option value="2027">2027</option>
@@ -143,7 +109,7 @@
         </select>
       </div>
       <div>
-        <label>Round</label>
+        <label class="field-label">Round</label>
         <select id="resRound"><option value="">— loading —</option></select>
       </div>
       <button class="btn" onclick="fetchPreview()">🔄 Fetch Results</button>
@@ -169,7 +135,6 @@
         </div>
       </div>
     </div>
-
     <div class="card">
       <h2>Score Preview</h2>
       <div class="preview-grid" id="previewGrid"></div>
@@ -178,6 +143,44 @@
         <div class="last-published" id="lastPublished"></div>
       </div>
       <div id="publishMsg" class="status-msg hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- WHATSAPP TAB -->
+<div id="whatsappTab" class="hidden">
+  <div class="card">
+    <h2>Generate WhatsApp Message</h2>
+    <div class="config-row">
+      <div>
+        <label class="field-label">Season</label>
+        <select id="waSeason">
+          <option value="2026">2026</option>
+          <option value="2027">2027</option>
+          <option value="2028">2028</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Round</label>
+        <select id="waRound"><option value="">— loading —</option></select>
+      </div>
+    </div>
+    <label class="field-label">Extra context (optional)</label>
+    <textarea id="waContext" rows="3" placeholder="e.g. Ollie was at the race in Melbourne. Verstappen had a nightmare in qualifying and started P17..." style="margin-bottom:12px"></textarea>
+    <button class="btn" onclick="generateMessage()">💬 Generate Message</button>
+    <div id="waStatus" class="status-msg hidden"></div>
+  </div>
+
+  <div id="waPreview" class="hidden">
+    <div class="card">
+      <h2>Generated Message</h2>
+      <p style="color:#888;font-size:0.78rem;margin-bottom:10px;">Edit before sending if needed.</p>
+      <textarea id="waText" rows="14"></textarea>
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <button class="btn" style="flex:1" onclick="copyMessage()">📋 Copy to Clipboard</button>
+        <button class="btn grey" style="flex:1" onclick="generateMessage()">🔄 Regenerate</button>
+      </div>
+      <div id="copyConfirm" class="status-msg success hidden">✅ Copied!</div>
     </div>
   </div>
 </div>
@@ -235,16 +238,164 @@ async function sbUpsert(path, body) {
   return r.json();
 }
 
+// ---- TABS ----
 function showTab(tab, btn) {
-  ['tests','results','whatsapp'].forEach(t => document.getElementById(t+'Tab').classList.toggle('hidden', t !== tab));
+  ['tests','results','whatsapp'].forEach(t => {
+    document.getElementById(t+'Tab').classList.toggle('hidden', t !== tab);
+  });
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   if (tab === 'results') { loadLastPublished(); loadResRounds(); }
   if (tab === 'whatsapp') loadWaRounds();
 }
 
-// ---- WHATSAPP TAB ----
+// ---- RESULTS TAB ----
+let previewData = null;
 
+async function loadLastPublished() {
+  try {
+    const rows = await sbGet('published_log?order=published_at.desc&limit=1');
+    const el = document.getElementById('lastPublished');
+    if (rows?.length) {
+      const d = new Date(rows[0].published_at);
+      el.innerHTML = `Last published: <span>${d.toLocaleString('en-GB')}</span> — ${rows[0].race_name}`;
+    } else {
+      el.innerHTML = 'No results published yet.';
+    }
+  } catch(e) { document.getElementById('lastPublished').textContent = ''; }
+}
+
+async function loadResRounds() {
+  const season = document.getElementById('resSeason').value;
+  const sel = document.getElementById('resRound');
+  sel.innerHTML = '<option value="">— loading —</option>';
+  try {
+    const races = await sbGet(`races?season=eq.${season}&order=round.asc`);
+    sel.innerHTML = races.length
+      ? races.map(r => `<option value="${r.round}">${r.round}. ${r.name}</option>`).join('')
+      : '<option value="">No races found</option>';
+  } catch(e) { sel.innerHTML = '<option value="">Failed to load</option>'; }
+}
+
+async function fetchPreview() {
+  const season = document.getElementById('resSeason').value;
+  const round  = document.getElementById('resRound').value;
+  const msg    = document.getElementById('fetchMsg');
+  const section = document.getElementById('previewSection');
+  section.classList.add('hidden');
+  previewData = null;
+  if (!round) { msg.className='status-msg error'; msg.textContent='Select a round first.'; msg.classList.remove('hidden'); return; }
+  msg.className = 'status-msg info'; msg.textContent = '⏳ Fetching from Jolpica...'; msg.classList.remove('hidden');
+
+  try {
+    const [qRes, rRes] = await Promise.all([
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`),
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`)
+    ]);
+    const qData = await qRes.json(), rData = await rRes.json();
+    const qRace = qData.MRData.RaceTable.Races[0];
+    const rRace = rData.MRData.RaceTable.Races[0];
+
+    if (!qRace && !rRace) { msg.className='status-msg error'; msg.textContent='⚠️ No results available yet from Jolpica.'; return; }
+
+    const qTop3 = qRace ? qRace.QualifyingResults.slice(0,3).map(d => d.Driver.familyName) : null;
+    const rTop3 = rRace ? rRace.Results.slice(0,3).map(d => d.Driver.familyName) : null;
+    const hasQual = !!qTop3, hasRace = !!rTop3;
+
+    if (hasQual) {
+      ['qr1','qr2','qr3'].forEach((id,i) => { const el=document.getElementById('a'+id); el.textContent=qTop3[i]; el.style.color=''; });
+    } else {
+      ['qr1','qr2','qr3'].forEach(id => { document.getElementById('a'+id).textContent='—'; });
+    }
+    if (hasRace) {
+      ['rr1','rr2','rr3'].forEach((id,i) => { const el=document.getElementById('a'+id); el.textContent=rTop3[i]; el.style.color=''; });
+    } else {
+      ['rr1','rr2','rr3'].forEach(id => { const el=document.getElementById('a'+id); el.textContent='Pending'; el.style.color='#ffaa44'; });
+    }
+
+    const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
+    const raceId   = raceRows?.[0]?.id;
+    const raceName = raceRows?.[0]?.name || `Round ${round}`;
+    let preds = [];
+    if (raceId) preds = await sbGet(`predictions?race_id=eq.${raceId}`);
+
+    const grid = document.getElementById('previewGrid');
+    grid.innerHTML = PLAYERS.map(player => {
+      const p = preds.find(x => x.player_name === player);
+      const qPreds = p ? [p.quali_p1,p.quali_p2,p.quali_p3] : [null,null,null];
+      const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
+      const qScore = hasQual ? calcScore(qPreds, qTop3, QUALI_PTS) : null;
+      const rScore = hasRace ? calcScore(rPreds, rTop3, RACE_PTS)  : null;
+      const total  = (qScore||0) + (rScore||0);
+
+      const predLine = (pred, actual, label) => {
+        if (!actual) return `<div class="pred-line miss"><span class="pos-label">${label}</span><span class="driver" style="color:#ffaa44">${pred||'—'} ⏳</span></div>`;
+        if (!pred) return `<div class="pred-line miss"><span class="pos-label">${label}</span><span class="driver">—</span></div>`;
+        const ni = actual.findIndex(r => norm(r) === norm(pred));
+        const pi = ['P1','P2','P3'].indexOf(label);
+        let cls = ni===pi ? 'exact' : (ni!==-1 && Math.abs(ni-pi)===1 ? 'close' : 'miss');
+        return `<div class="pred-line ${cls}"><span class="pos-label">${label}</span><span class="driver">${pred}</span></div>`;
+      };
+
+      return `<div class="preview-card">
+        <h3>${player} <span>${total}${!hasRace?' ⏳':''} pts</span></h3>
+        <div class="section-title" style="font-size:0.68rem">Qualifying (${qScore!==null?qScore:'—'})</div>
+        ${predLine(qPreds[0],qTop3,'P1')}${predLine(qPreds[1],qTop3,'P2')}${predLine(qPreds[2],qTop3,'P3')}
+        <div class="section-title" style="font-size:0.68rem;margin-top:8px">Race (${rScore!==null?rScore:'pending'})</div>
+        ${predLine(rPreds[0],rTop3,'P1')}${predLine(rPreds[1],rTop3,'P2')}${predLine(rPreds[2],rTop3,'P3')}
+      </div>`;
+    }).join('');
+
+    const publishBtn = document.getElementById('publishBtn');
+    publishBtn.disabled = !hasQual || !hasRace;
+    publishBtn.title = !hasRace ? 'Race results not available yet' : '';
+
+    previewData = { season, round, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], preds, hasQual, hasRace };
+    section.classList.remove('hidden');
+    msg.className = hasQual && hasRace ? 'status-msg success' : 'status-msg info';
+    msg.textContent = hasQual && hasRace
+      ? `✅ Full results fetched for ${raceName} — ready to publish`
+      : `⏳ Qualifying available for ${raceName} — race results not yet published`;
+  } catch(e) {
+    msg.className = 'status-msg error'; msg.textContent = `❌ ${e.message}`;
+  }
+}
+
+async function publishResults() {
+  if (!previewData) return;
+  const { season, round, raceId, raceName, qTop3, rTop3, preds } = previewData;
+  const btn = document.getElementById('publishBtn');
+  const msg = document.getElementById('publishMsg');
+  btn.disabled = true;
+  msg.className = 'status-msg info'; msg.textContent = '⏳ Publishing...'; msg.classList.remove('hidden');
+  try {
+    let rid = raceId;
+    if (!rid) {
+      const upserted = await sbUpsert('races', { season:parseInt(season), round:parseInt(round), name:raceName, qualifying_at:new Date().toISOString(), race_at:new Date().toISOString() });
+      rid = upserted?.[0]?.id;
+    }
+    if (!rid) throw new Error('Could not resolve race ID');
+    await sbUpsert('results', { race_id:rid, quali_p1:qTop3[0], quali_p2:qTop3[1], quali_p3:qTop3[2], race_p1:rTop3[0], race_p2:rTop3[1], race_p3:rTop3[2], fetched_at:new Date().toISOString() });
+    const scoreRows = PLAYERS.map(player => {
+      const p = preds.find(x => x.player_name === player);
+      const qPreds = p ? [p.quali_p1,p.quali_p2,p.quali_p3] : [null,null,null];
+      const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
+      const qs = calcScore(qPreds, qTop3, QUALI_PTS);
+      const rs = calcScore(rPreds, rTop3, RACE_PTS);
+      return { player_name:player, race_id:rid, quali_score:qs, race_score:rs, total_score:qs+rs, calculated_at:new Date().toISOString() };
+    });
+    await sbUpsert('scores', scoreRows);
+    await sbUpsert('published_log', { race_id:rid, race_name:raceName, published_at:new Date().toISOString() });
+    msg.className = 'status-msg success';
+    msg.textContent = `✅ Results published for ${raceName}! Scores are now live in NigeBot.`;
+    loadLastPublished();
+  } catch(e) {
+    msg.className = 'status-msg error'; msg.textContent = `❌ ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+// ---- WHATSAPP TAB ----
 async function loadWaRounds() {
   const season = document.getElementById('waSeason').value;
   const sel = document.getElementById('waRound');
@@ -269,7 +420,6 @@ async function generateMessage() {
   status.className='status-msg info'; status.textContent='⏳ Gathering data...'; status.classList.remove('hidden');
 
   try {
-    // 1. Get scores from Supabase
     const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
     const raceId = raceRows?.[0]?.id;
     if (!raceId) throw new Error('Race not found in DB');
@@ -279,244 +429,91 @@ async function generateMessage() {
     ]);
     if (!scores.length) throw new Error('No scores found — publish results first');
 
-    // Season leaderboard
-    const allIds = allSeasonRaces.map(r => r.id).join(',');
+    const allIds = allSeasonRaces.map(r=>r.id).join(',');
     const allScores = await sbGet(`scores?race_id=in.(${allIds})`);
     const seasonTotals = {};
     PLAYERS.forEach(p => seasonTotals[p] = 0);
-    allScores.forEach(s => { if (seasonTotals[s.player_name] !== undefined) seasonTotals[s.player_name] += s.total_score; });
-    const leaderboard = Object.entries(seasonTotals).sort((a,b) => b[1]-a[1]);
+    allScores.forEach(s => { if (seasonTotals[s.player_name]!==undefined) seasonTotals[s.player_name]+=s.total_score; });
+    const leaderboard = Object.entries(seasonTotals).sort((a,b)=>b[1]-a[1]);
 
-    // Biggest mover — compare previous round scores to current
-    const prevRaces = allSeasonRaces.filter(r => r.round < parseInt(round));
+    const prevRaces = allSeasonRaces.filter(r=>r.round<parseInt(round));
     let biggestMover = null;
     if (prevRaces.length) {
-      const prevIds = prevRaces.map(r => r.id).join(',');
+      const prevIds = prevRaces.map(r=>r.id).join(',');
       const prevScores = await sbGet(`scores?race_id=in.(${prevIds})`);
       const prevTotals = {};
-      PLAYERS.forEach(p => prevTotals[p] = 0);
-      prevScores.forEach(s => { if (prevTotals[s.player_name] !== undefined) prevTotals[s.player_name] += s.total_score; });
-      const prevRanks = Object.entries(prevTotals).sort((a,b) => b[1]-a[1]).map(([p],i) => ({p, rank: i+1}));
-      const newRanks  = leaderboard.map(([p],i) => ({p, rank: i+1}));
-      let maxMove = 0;
-      newRanks.forEach(({p, rank}) => {
-        const prev = prevRanks.find(x => x.p === p);
-        if (prev && (prev.rank - rank) > maxMove) { maxMove = prev.rank - rank; biggestMover = {name: p, places: maxMove}; }
+      PLAYERS.forEach(p => prevTotals[p]=0);
+      prevScores.forEach(s => { if(prevTotals[s.player_name]!==undefined) prevTotals[s.player_name]+=s.total_score; });
+      const prevRanks = Object.entries(prevTotals).sort((a,b)=>b[1]-a[1]).map(([p],i)=>({p,rank:i+1}));
+      const newRanks  = leaderboard.map(([p],i)=>({p,rank:i+1}));
+      let maxMove=0;
+      newRanks.forEach(({p,rank})=>{
+        const prev=prevRanks.find(x=>x.p===p);
+        if(prev&&(prev.rank-rank)>maxMove){maxMove=prev.rank-rank;biggestMover={name:p,places:maxMove};}
       });
     }
 
-    // Who scored zero
-    const zeroScorers = scores.filter(s => s.total_score === 0).map(s => s.player_name);
+    const zeroScorers = scores.filter(s=>s.total_score===0).map(s=>s.player_name);
 
-    // 2. Get Jolpica data — top 3 + fastest lap
-    status.textContent = '⏳ Fetching race data...';
+    status.textContent='⏳ Fetching race data...';
     const [qRes, rRes, flRes] = await Promise.all([
       fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`),
       fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`),
       fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/fastest/1/`)
     ]);
-    const qData = await qRes.json(), rData = await rRes.json(), flData = await flRes.json();
-    const qTop3 = qData.MRData.RaceTable.Races[0]?.QualifyingResults?.slice(0,3).map(d => d.Driver.familyName) || [];
-    const rTop3 = rData.MRData.RaceTable.Races[0]?.Results?.slice(0,3).map(d => d.Driver.familyName) || [];
-    const fastestLap = flData.MRData.RaceTable.Races[0]?.Results?.[0];
-    const fastestLapStr = fastestLap ? `${fastestLap.Driver.familyName} (${fastestLap.FastestLap.Time.time})` : null;
+    const qData=await qRes.json(), rData=await rRes.json(), flData=await flRes.json();
+    const qTop3=qData.MRData.RaceTable.Races[0]?.QualifyingResults?.slice(0,3).map(d=>d.Driver.familyName)||[];
+    const rTop3=rData.MRData.RaceTable.Races[0]?.Results?.slice(0,3).map(d=>d.Driver.familyName)||[];
+    const fastestLap=flData.MRData.RaceTable.Races[0]?.Results?.[0];
+    const fastestLapStr=fastestLap?`${fastestLap.Driver.familyName} (${fastestLap.FastestLap.Time.time})`:null;
 
-    // 3. Get custom context from admin
     const extraContext = document.getElementById('waContext').value.trim();
 
-    // 4. Call Claude API
-    status.textContent = '⏳ Generating message...';
+    status.textContent='⏳ Generating message...';
     const prompt = `You are NigeBot, the F1 predictions tracker for a group of mates called the Park Estate group. Write a WhatsApp message announcing the results of the ${raceName} ${season} prediction game.
 
 Tone: dry British banter, wicked but harmless sense of humour. Occasionally take a gentle dig at Max Verstappen but not every time. Keep it punchy — this is a WhatsApp message, not an essay. Use emojis sparingly but effectively.
 
 Race data:
-- Qualifying top 3: ${qTop3.join(', ') || 'unavailable'}
-- Race top 3: ${rTop3.join(', ') || 'unavailable'}
-- Fastest lap: ${fastestLapStr || 'unavailable'}
-${extraContext ? `\nExtra context from the admin (weave this in naturally):\n${extraContext}` : ''}
+- Qualifying top 3: ${qTop3.join(', ')||'unavailable'}
+- Race top 3: ${rTop3.join(', ')||'unavailable'}
+- Fastest lap: ${fastestLapStr||'unavailable'}
+${extraContext?`\nExtra context from the admin (weave this in naturally):\n${extraContext}`:''}
 
 Prediction scores this round (ordered by score):
-${scores.map((s,i) => `${i+1}. ${s.player_name} — ${s.total_score} pts (Quali: ${s.quali_score}, Race: ${s.race_score})`).join('\n')}
+${scores.map((s,i)=>`${i+1}. ${s.player_name} — ${s.total_score} pts (Quali: ${s.quali_score}, Race: ${s.race_score})`).join('\n')}
 
 Season leaderboard after this round:
-${leaderboard.map(([p,t],i) => `${i+1}. ${p} — ${t} pts`).join('\n')}
+${leaderboard.map(([p,t],i)=>`${i+1}. ${p} — ${t} pts`).join('\n')}
 
 Additional context:
-${biggestMover ? `- Biggest mover: ${biggestMover.name} moved up ${biggestMover.places} place${biggestMover.places>1?'s':''} in the standings` : '- No significant position changes this round'}
-${zeroScorers.length ? `- Scored zero points: ${zeroScorers.join(', ')}` : '- Everyone scored points this round'}
+${biggestMover?`- Biggest mover: ${biggestMover.name} moved up ${biggestMover.places} place${biggestMover.places>1?'s':''} in the standings`:'- No significant position changes this round'}
+${zeroScorers.length?`- Scored zero points: ${zeroScorers.join(', ')}`:'- Everyone scored points this round'}
 
 Include: a brief nod to the race itself, round scores with a comment on the winner, a dig at anyone who scored zero, the biggest mover if relevant, the fastest lap, and the season standings. End with the NigeBot link: boxteqist.github.io/nigebot`;
 
     const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] })
     });
     const apiData = await apiRes.json();
     const message = apiData.content?.[0]?.text;
     if (!message) throw new Error('No message returned from Claude');
-
     document.getElementById('waText').value = message;
     preview.classList.remove('hidden');
-    status.className = 'status-msg success'; status.textContent = '✅ Message generated!';
+    status.className='status-msg success'; status.textContent='✅ Message generated!';
   } catch(e) {
-    status.className = 'status-msg error'; status.textContent = `❌ ${e.message}`;
+    status.className='status-msg error'; status.textContent=`❌ ${e.message}`;
   }
 }
 
 function copyMessage() {
-  const text = document.getElementById('waText').value;
-  navigator.clipboard.writeText(text).then(() => {
-    const el = document.getElementById('copyConfirm');
+  navigator.clipboard.writeText(document.getElementById('waText').value).then(()=>{
+    const el=document.getElementById('copyConfirm');
     el.classList.remove('hidden');
-    setTimeout(() => el.classList.add('hidden'), 3000);
+    setTimeout(()=>el.classList.add('hidden'),3000);
   });
-}
-
-// ---- RESULTS TAB ----
-let previewData = null;
-
-async function loadLastPublished() {
-  try {
-    const rows = await sbGet('published_log?order=published_at.desc&limit=1');
-    const el = document.getElementById('lastPublished');
-    if (rows?.length) {
-      const d = new Date(rows[0].published_at);
-      el.innerHTML = `Last published: <span>${d.toLocaleString('en-GB')}</span> — ${rows[0].race_name}`;
-    } else {
-      el.innerHTML = 'No results published yet.';
-    }
-  } catch(e) {
-    document.getElementById('lastPublished').textContent = '';
-  }
-}
-
-async function loadResRounds() {
-  const season = document.getElementById('resSeason').value;
-  const sel = document.getElementById('resRound');
-  sel.innerHTML = '<option value="">— loading —</option>';
-  try {
-    const races = await sbGet(`races?season=eq.${season}&order=round.asc`);
-    sel.innerHTML = races.length
-      ? races.map(r => `<option value="${r.round}">${r.round}. ${r.name}</option>`).join('')
-      : '<option value="">No races found</option>';
-  } catch(e) { sel.innerHTML = '<option value="">Failed to load</option>'; }
-}
-
-async function fetchPreview() {
-  const season = document.getElementById('resSeason').value;
-  const round  = document.getElementById('resRound').value;
-  if (!round) { msg.className='status-msg error'; msg.textContent='Select a round first.'; msg.classList.remove('hidden'); return; }
-  const msg    = document.getElementById('fetchMsg');
-  const section = document.getElementById('previewSection');
-  section.classList.add('hidden');
-  previewData = null;
-  msg.className = 'status-msg info'; msg.textContent = '⏳ Fetching from Jolpica...'; msg.classList.remove('hidden');
-
-  try {
-    const [qRes, rRes] = await Promise.all([
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`),
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`)
-    ]);
-    const qData = await qRes.json(), rData = await rRes.json();
-    const qRace = qData.MRData.RaceTable.Races[0], rRace = rData.MRData.RaceTable.Races[0];
-    if (!qRace || !rRace) { msg.className='status-msg error'; msg.textContent='⚠️ Results not available yet from Jolpica.'; return; }
-
-    const qTop3 = qRace.QualifyingResults.slice(0,3).map(d => d.Driver.familyName);
-    const rTop3 = rRace.Results.slice(0,3).map(d => d.Driver.familyName);
-
-    ['qr1','qr2','qr3'].forEach((id,i) => document.getElementById('a'+id).textContent = qTop3[i]);
-    ['rr1','rr2','rr3'].forEach((id,i) => document.getElementById('a'+id).textContent = rTop3[i]);
-
-    const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
-    const raceId   = raceRows?.[0]?.id;
-    const raceName = raceRows?.[0]?.name || `Round ${round}`;
-
-    let preds = [];
-    if (raceId) preds = await sbGet(`predictions?race_id=eq.${raceId}`);
-
-    const grid = document.getElementById('previewGrid');
-    grid.innerHTML = PLAYERS.map(player => {
-      const p = preds.find(x => x.player_name === player);
-      const qPreds = p ? [p.quali_p1, p.quali_p2, p.quali_p3] : [null,null,null];
-      const rPreds = p ? [p.race_p1,  p.race_p2,  p.race_p3]  : [null,null,null];
-      const qScore = calcScore(qPreds, qTop3, QUALI_PTS);
-      const rScore = calcScore(rPreds, rTop3, RACE_PTS);
-      const total  = qScore + rScore;
-
-      const predLine = (pred, actual, label) => {
-        if (!pred) return `<div class="pred-line miss"><span class="pos-label">${label}</span><span class="driver">—</span></div>`;
-        const ni = actual.findIndex(r => norm(r) === norm(pred));
-        const pi = ['P1','P2','P3'].indexOf(label);
-        let cls = 'miss';
-        if (ni === pi) cls = 'exact';
-        else if (ni !== -1 && Math.abs(ni - pi) === 1) cls = 'close';
-        return `<div class="pred-line ${cls}"><span class="pos-label">${label}</span><span class="driver">${pred}</span></div>`;
-      };
-
-      return `<div class="preview-card">
-        <h3>${player} <span>${total} pts</span></h3>
-        <div class="section-title" style="font-size:0.68rem">Qualifying (${qScore})</div>
-        ${predLine(qPreds[0],qTop3,'P1')}${predLine(qPreds[1],qTop3,'P2')}${predLine(qPreds[2],qTop3,'P3')}
-        <div class="section-title" style="font-size:0.68rem;margin-top:8px">Race (${rScore})</div>
-        ${predLine(rPreds[0],rTop3,'P1')}${predLine(rPreds[1],rTop3,'P2')}${predLine(rPreds[2],rTop3,'P3')}
-      </div>`;
-    }).join('');
-
-    previewData = { season, round, raceId, raceName, qTop3, rTop3, preds };
-    section.classList.remove('hidden');
-    msg.className = 'status-msg success'; msg.textContent = `✅ Results fetched for ${raceName}`;
-  } catch(e) {
-    msg.className = 'status-msg error'; msg.textContent = `❌ ${e.message}`;
-  }
-}
-
-async function publishResults() {
-  if (!previewData) return;
-  const { season, round, raceId, raceName, qTop3, rTop3, preds } = previewData;
-  const btn = document.getElementById('publishBtn');
-  const msg = document.getElementById('publishMsg');
-  btn.disabled = true;
-  msg.className = 'status-msg info'; msg.textContent = '⏳ Publishing...'; msg.classList.remove('hidden');
-
-  try {
-    let rid = raceId;
-    if (!rid) {
-      const upserted = await sbUpsert('races', { season: parseInt(season), round: parseInt(round), name: raceName, qualifying_at: new Date().toISOString(), race_at: new Date().toISOString() });
-      rid = upserted?.[0]?.id;
-    }
-    if (!rid) throw new Error('Could not resolve race ID');
-
-    await sbUpsert('results', {
-      race_id: rid, quali_p1: qTop3[0], quali_p2: qTop3[1], quali_p3: qTop3[2],
-      race_p1: rTop3[0], race_p2: rTop3[1], race_p3: rTop3[2],
-      fetched_at: new Date().toISOString()
-    });
-
-    const scoreRows = PLAYERS.map(player => {
-      const p = preds.find(x => x.player_name === player);
-      const qPreds = p ? [p.quali_p1, p.quali_p2, p.quali_p3] : [null,null,null];
-      const rPreds = p ? [p.race_p1,  p.race_p2,  p.race_p3]  : [null,null,null];
-      const qs = calcScore(qPreds, qTop3, QUALI_PTS);
-      const rs = calcScore(rPreds, rTop3, RACE_PTS);
-      return { player_name: player, race_id: rid, quali_score: qs, race_score: rs, total_score: qs+rs, calculated_at: new Date().toISOString() };
-    });
-    await sbUpsert('scores', scoreRows);
-
-    await sbUpsert('published_log', { race_id: rid, race_name: raceName, published_at: new Date().toISOString() });
-
-    msg.className = 'status-msg success';
-    msg.textContent = `✅ Results published for ${raceName}! Scores are now live in NigeBot.`;
-    loadLastPublished();
-  } catch(e) {
-    msg.className = 'status-msg error'; msg.textContent = `❌ ${e.message}`;
-    btn.disabled = false;
-  }
 }
 
 // ---- TESTS TAB ----
@@ -528,35 +525,35 @@ const testGroups = [
         run: async () => {
           const races = await sbGet('races?order=round.asc');
           if (!races.length) throw new Error('No races in DB');
-          const latest = races[races.length - 1];
+          const latest = races[races.length-1];
           const r = await fetch(`https://api.jolpi.ca/ergast/f1/${latest.season}/${latest.round}/qualifying/`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
           const race = data.MRData.RaceTable.Races[0];
           if (!race) throw new Error(`No data returned for ${latest.name} — results may not be published yet`);
-          const top3 = race.QualifyingResults.slice(0,3).map(d => d.Driver.familyName);
-          if (top3.length < 3) throw new Error(`Only ${top3.length} results returned`);
+          const top3 = race.QualifyingResults.slice(0,3).map(d=>d.Driver.familyName);
+          if (top3.length<3) throw new Error(`Only ${top3.length} results returned`);
           return `${latest.name}: P1: ${top3[0]}, P2: ${top3[1]}, P3: ${top3[2]}`;
         }},
       { name: 'Race results available', detail: 'Fetches race top 3 for the latest race in DB',
         run: async () => {
           const races = await sbGet('races?order=round.asc');
           if (!races.length) throw new Error('No races in DB');
-          const latest = races[races.length - 1];
+          const latest = races[races.length-1];
           const r = await fetch(`https://api.jolpi.ca/ergast/f1/${latest.season}/${latest.round}/results/`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
           const race = data.MRData.RaceTable.Races[0];
           if (!race) throw new Error(`No data returned for ${latest.name} — results may not be published yet`);
-          const top3 = race.Results.slice(0,3).map(d => d.Driver.familyName);
-          if (top3.length < 3) throw new Error(`Only ${top3.length} results returned`);
+          const top3 = race.Results.slice(0,3).map(d=>d.Driver.familyName);
+          if (top3.length<3) throw new Error(`Only ${top3.length} results returned`);
           return `${latest.name}: P1: ${top3[0]}, P2: ${top3[1]}, P3: ${top3[2]}`;
         }},
       { name: 'Season schedule reachable', detail: 'Fetches the full season calendar for the latest season in DB',
         run: async () => {
           const races = await sbGet('races?order=round.asc');
           if (!races.length) throw new Error('No races in DB');
-          const season = races[races.length - 1].season;
+          const season = races[races.length-1].season;
           const r = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
@@ -570,19 +567,19 @@ const testGroups = [
     name: 'Scoring Logic',
     tests: [
       { name: 'Exact match — Race P1', detail: 'Predict Verstappen P1, he finishes P1 → 25pts',
-        run: () => { const s = calcScore(['Verstappen'],['Verstappen','Norris','Hamilton'],RACE_PTS); if(s!==25) throw new Error(`Expected 25, got ${s}`); }},
+        run: () => { const s=calcScore(['Verstappen'],['Verstappen','Norris','Hamilton'],RACE_PTS); if(s!==25) throw new Error(`Expected 25, got ${s}`); }},
       { name: 'One position off — Race P1 predicted, finishes P2', detail: 'Predict Verstappen P1, he finishes P2 → half of P2 = 9pts',
-        run: () => { const s = calcScore(['Verstappen'],['Norris','Verstappen','Hamilton'],RACE_PTS); if(s!==9) throw new Error(`Expected 9, got ${s}`); }},
+        run: () => { const s=calcScore(['Verstappen'],['Norris','Verstappen','Hamilton'],RACE_PTS); if(s!==9) throw new Error(`Expected 9, got ${s}`); }},
       { name: 'Two positions off — zero points', detail: 'Predict Verstappen P1, he finishes P3 → 0pts',
-        run: () => { const s = calcScore(['Verstappen'],['Norris','Hamilton','Verstappen'],RACE_PTS); if(s!==0) throw new Error(`Expected 0, got ${s}`); }},
+        run: () => { const s=calcScore(['Verstappen'],['Norris','Hamilton','Verstappen'],RACE_PTS); if(s!==0) throw new Error(`Expected 0, got ${s}`); }},
       { name: 'Not in top 3 — zero points', detail: "Predict Alonso P1, he doesn't finish top 3 → 0pts",
-        run: () => { const s = calcScore(['Alonso'],['Verstappen','Norris','Hamilton'],RACE_PTS); if(s!==0) throw new Error(`Expected 0, got ${s}`); }},
+        run: () => { const s=calcScore(['Alonso'],['Verstappen','Norris','Hamilton'],RACE_PTS); if(s!==0) throw new Error(`Expected 0, got ${s}`); }},
       { name: 'Driver code recognised — VER = Verstappen', detail: 'Predict VER P1, Verstappen finishes P1 → 25pts',
-        run: () => { const s = calcScore(['VER'],['Verstappen','Norris','Hamilton'],RACE_PTS); if(s!==25) throw new Error(`Expected 25, got ${s}`); }},
+        run: () => { const s=calcScore(['VER'],['Verstappen','Norris','Hamilton'],RACE_PTS); if(s!==25) throw new Error(`Expected 25, got ${s}`); }},
       { name: 'Full qualifying prediction', detail: 'VER P1, PIA P2, HAM P3 — all exact → 29pts',
-        run: () => { const s = calcScore(['VER','PIA','HAM'],['Verstappen','Piastri','Hamilton'],QUALI_PTS); if(s!==29) throw new Error(`Expected 29, got ${s}`); }},
+        run: () => { const s=calcScore(['VER','PIA','HAM'],['Verstappen','Piastri','Hamilton'],QUALI_PTS); if(s!==29) throw new Error(`Expected 29, got ${s}`); }},
       { name: "Full race prediction — Tim's Australia picks", detail: 'HAM P1, VER P2, ANT P3 vs actual results',
-        run: () => { const s = calcScore(['HAM','VER','ANT'],['Hamilton','Verstappen','Antonelli'],RACE_PTS); if(s!==58) throw new Error(`Expected 58, got ${s}`); }},
+        run: () => { const s=calcScore(['HAM','VER','ANT'],['Hamilton','Verstappen','Antonelli'],RACE_PTS); if(s!==58) throw new Error(`Expected 58, got ${s}`); }},
     ]
   },
   {
@@ -602,16 +599,16 @@ const testGroups = [
         run: async () => {
           const races = await sbGet('races?limit=1');
           if (!races.length) throw new Error('No races in DB — select a race first');
-          const res = await sbUpsert('predictions', { race_id: races[0].id, player_name: '__test__', quali_p1:'VER', quali_p2:'NOR', quali_p3:'HAM', race_p1:'NOR', race_p2:'VER', race_p3:'LEC', submitted_at: new Date().toISOString() });
-          if (!res || res.error) throw new Error(res?.error?.message || 'Save failed');
+          const res = await sbUpsert('predictions', { race_id:races[0].id, player_name:'__test__', quali_p1:'VER', quali_p2:'NOR', quali_p3:'HAM', race_p1:'NOR', race_p2:'VER', race_p3:'LEC', submitted_at:new Date().toISOString() });
+          if (!res||res.error) throw new Error(res?.error?.message||'Save failed');
         }},
       { name: 'Can update an existing prediction', detail: 'Updates the test prediction without 409 conflict',
         run: async () => {
           const races = await sbGet('races?limit=1');
           if (!races.length) throw new Error('No races in DB');
-          const res = await sbUpsert('predictions', { race_id: races[0].id, player_name: '__test__', quali_p1:'HAM', quali_p2:'PIA', quali_p3:'SAI', race_p1:'HAM', race_p2:'NOR', race_p3:'VER', submitted_at: new Date().toISOString() });
-          if (!res || res.error) throw new Error(res?.error?.message || 'Update failed');
-          if (res[0]?.quali_p1 !== 'HAM') throw new Error('Update did not persist');
+          const res = await sbUpsert('predictions', { race_id:races[0].id, player_name:'__test__', quali_p1:'HAM', quali_p2:'PIA', quali_p3:'SAI', race_p1:'HAM', race_p2:'NOR', race_p3:'VER', submitted_at:new Date().toISOString() });
+          if (!res||res.error) throw new Error(res?.error?.message||'Update failed');
+          if (res[0]?.quali_p1!=='HAM') throw new Error('Update did not persist');
         }},
       { name: 'Updated prediction reads back correctly', detail: 'Reads the test prediction and confirms the update',
         run: async () => {
@@ -619,22 +616,22 @@ const testGroups = [
           if (!races.length) throw new Error('No races in DB');
           const preds = await sbGet(`predictions?race_id=eq.${races[0].id}&player_name=eq.__test__`);
           if (!preds.length) throw new Error('Prediction not found');
-          if (preds[0].quali_p1 !== 'HAM') throw new Error(`Expected HAM, got ${preds[0].quali_p1}`);
+          if (preds[0].quali_p1!=='HAM') throw new Error(`Expected HAM, got ${preds[0].quali_p1}`);
         }},
       { name: 'Clean up test data', detail: 'Removes the __test__ prediction from DB',
         run: async () => {
-          const r = await fetch(`${SB_URL}/rest/v1/predictions?player_name=eq.__test__`, { method: 'DELETE', headers: hdrs });
+          const r = await fetch(`${SB_URL}/rest/v1/predictions?player_name=eq.__test__`, { method:'DELETE', headers:hdrs });
           if (!r.ok) throw new Error(`Cleanup failed: HTTP ${r.status}`);
         }},
     ]
-  },
+  }
 ];
 
 function renderGroups() {
-  document.getElementById('testGroups').innerHTML = testGroups.map((g, gi) => `
+  document.getElementById('testGroups').innerHTML = testGroups.map((g,gi) => `
     <div class="card">
       <h2>${g.name}</h2>
-      ${g.tests.map((t, ti) => `
+      ${g.tests.map((t,ti) => `
         <div class="test" id="test_${gi}_${ti}">
           <div class="test-icon" id="icon_${gi}_${ti}">⏳</div>
           <div class="test-name">
@@ -648,36 +645,36 @@ function renderGroups() {
 
 async function runAll() {
   renderGroups();
-  let passed = 0, failed = 0;
-  const total = testGroups.reduce((a,g) => a+g.tests.length, 0);
-  let done = 0;
-  for (let gi = 0; gi < testGroups.length; gi++) {
-    for (let ti = 0; ti < testGroups[gi].tests.length; ti++) {
-      const t = testGroups[gi].tests[ti];
-      const statusEl = document.getElementById(`status_${gi}_${ti}`);
-      const iconEl   = document.getElementById(`icon_${gi}_${ti}`);
-      const detailEl = document.getElementById(`detail_${gi}_${ti}`);
-      statusEl.className = 'test-status status-running'; statusEl.textContent = 'Running…'; iconEl.textContent = '⏳';
+  let passed=0, failed=0;
+  const total = testGroups.reduce((a,g)=>a+g.tests.length,0);
+  let done=0;
+  for (let gi=0;gi<testGroups.length;gi++) {
+    for (let ti=0;ti<testGroups[gi].tests.length;ti++) {
+      const t=testGroups[gi].tests[ti];
+      const statusEl=document.getElementById(`status_${gi}_${ti}`);
+      const iconEl=document.getElementById(`icon_${gi}_${ti}`);
+      const detailEl=document.getElementById(`detail_${gi}_${ti}`);
+      statusEl.className='test-status status-running'; statusEl.textContent='Running…'; iconEl.textContent='⏳';
       try {
-        const extra = await t.run();
-        statusEl.className = 'test-status status-pass'; statusEl.textContent = 'Pass'; iconEl.textContent = '✅';
-        if (extra) { detailEl.textContent = `✅ ${extra}`; detailEl.style.color = '#4caf50'; }
+        const extra=await t.run();
+        statusEl.className='test-status status-pass'; statusEl.textContent='Pass'; iconEl.textContent='✅';
+        if(extra){detailEl.textContent=`✅ ${extra}`;detailEl.style.color='#4caf50';}
         passed++;
       } catch(e) {
-        statusEl.className = 'test-status status-fail'; statusEl.textContent = 'Fail'; iconEl.textContent = '❌';
-        detailEl.textContent = `❌ ${e.message}`; detailEl.style.color = '#ff6b6b';
+        statusEl.className='test-status status-fail'; statusEl.textContent='Fail'; iconEl.textContent='❌';
+        detailEl.textContent=`❌ ${e.message}`; detailEl.style.color='#ff6b6b';
         failed++;
       }
       done++;
-      document.getElementById('progressBar').style.width = `${(done/total)*100}%`;
-      document.getElementById('passCount').textContent = passed;
-      document.getElementById('failCount').textContent = failed;
-      document.getElementById('pendingCount').textContent = total - done;
-      await new Promise(r => setTimeout(r, 100));
+      document.getElementById('progressBar').style.width=`${(done/total)*100}%`;
+      document.getElementById('passCount').textContent=passed;
+      document.getElementById('failCount').textContent=failed;
+      document.getElementById('pendingCount').textContent=total-done;
+      await new Promise(r=>setTimeout(r,100));
     }
   }
-  document.getElementById('passCount').className = 'summary-num pass';
-  document.getElementById('progressBar').style.background = failed > 0 ? '#ff6b6b' : '#4caf50';
+  document.getElementById('passCount').className='summary-num pass';
+  document.getElementById('progressBar').style.background=failed>0?'#ff6b6b':'#4caf50';
 }
 
 renderGroups();
