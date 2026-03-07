@@ -14,9 +14,11 @@
   .tab.active { background: #e10600; color: #fff; }
   .btn { background: #DC0000; color: #fff; border: none; border-radius: 8px; padding: 10px 20px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
   .btn:hover { background: #b00000; }
-  .btn:disabled { background: #444; cursor: not-allowed; }
-  .btn.green { background: #2a6a2a; }
+  .btn:disabled { background: #444; cursor: not-allowed; color: #888; }
+  .btn.green { background: #2a6a2a; color: #fff; }
   .btn.green:hover { background: #1a5a1a; }
+  .btn.amber { background: #7a5a00; color: #ffcc44; }
+  .btn.amber:hover { background: #8a6a00; }
   .btn.grey { background: #2a2a3a; }
   .btn.grey:hover { background: #3a3a4a; }
   .card { background: #1a1a24; border-radius: 10px; padding: 16px; margin-bottom: 16px; border: 1px solid #2a2a3a; }
@@ -73,12 +75,11 @@
 <body>
 
 <h1>🔧 NigeBot Man Cave</h1>
-<p class="subtitle">Admin tools — v1.0.9</p>
+<p class="subtitle">Admin tools — v1.2.0</p>
 
 <div class="tabs">
   <button class="tab active" onclick="showTab('tests',this)">🧪 Tests</button>
   <button class="tab" onclick="showTab('results',this)">📊 Results</button>
-  <button class="tab" onclick="showTab('whatsapp',this)">💬 WhatsApp</button>
 </div>
 
 <!-- TESTS TAB -->
@@ -139,48 +140,28 @@
       <h2>Score Preview</h2>
       <div class="preview-grid" id="previewGrid"></div>
       <div class="publish-row">
-        <button class="btn green" id="publishBtn" onclick="publishResults()">✅ Publish Results to NigeBot</button>
+        <button class="btn" id="publishBtn" onclick="publishResults()" disabled>✅ Publish Results to NigeBot</button>
         <div class="last-published" id="lastPublished"></div>
       </div>
       <div id="publishMsg" class="status-msg hidden"></div>
     </div>
-  </div>
-</div>
 
-<!-- WHATSAPP TAB -->
-<div id="whatsappTab" class="hidden">
-  <div class="card">
-    <h2>Generate WhatsApp Message</h2>
-    <div class="config-row">
-      <div>
-        <label class="field-label">Season</label>
-        <select id="waSeason">
-          <option value="2026">2026</option>
-          <option value="2027">2027</option>
-          <option value="2028">2028</option>
-        </select>
+    <!-- WHATSAPP SECTION (inline) -->
+    <div class="card" id="waSection">
+      <h2>💬 Generate WhatsApp Message</h2>
+      <label class="field-label">Extra context (optional)</label>
+      <textarea id="waContext" rows="3" placeholder="e.g. Ollie was at the race in Melbourne. Verstappen had a nightmare in qualifying and started P17..." style="margin-bottom:12px"></textarea>
+      <button class="btn" onclick="generateMessage()">💬 Generate Message</button>
+      <div id="waStatus" class="status-msg hidden"></div>
+      <div id="waPreview" class="hidden" style="margin-top:14px">
+        <p style="color:#888;font-size:0.78rem;margin-bottom:10px;">Edit before sending if needed.</p>
+        <textarea id="waText" rows="14"></textarea>
+        <div style="display:flex;gap:10px;margin-top:12px;">
+          <button class="btn" style="flex:1" onclick="copyMessage()">📋 Copy to Clipboard</button>
+          <button class="btn grey" style="flex:1" onclick="generateMessage()">🔄 Regenerate</button>
+        </div>
+        <div id="copyConfirm" class="status-msg success hidden">✅ Copied!</div>
       </div>
-      <div>
-        <label class="field-label">Round</label>
-        <select id="waRound"><option value="">— loading —</option></select>
-      </div>
-    </div>
-    <label class="field-label">Extra context (optional)</label>
-    <textarea id="waContext" rows="3" placeholder="e.g. Ollie was at the race in Melbourne. Verstappen had a nightmare in qualifying and started P17..." style="margin-bottom:12px"></textarea>
-    <button class="btn" onclick="generateMessage()">💬 Generate Message</button>
-    <div id="waStatus" class="status-msg hidden"></div>
-  </div>
-
-  <div id="waPreview" class="hidden">
-    <div class="card">
-      <h2>Generated Message</h2>
-      <p style="color:#888;font-size:0.78rem;margin-bottom:10px;">Edit before sending if needed.</p>
-      <textarea id="waText" rows="14"></textarea>
-      <div style="display:flex;gap:10px;margin-top:12px;">
-        <button class="btn" style="flex:1" onclick="copyMessage()">📋 Copy to Clipboard</button>
-        <button class="btn grey" style="flex:1" onclick="generateMessage()">🔄 Regenerate</button>
-      </div>
-      <div id="copyConfirm" class="status-msg success hidden">✅ Copied!</div>
     </div>
   </div>
 </div>
@@ -238,15 +219,24 @@ async function sbUpsert(path, body) {
   return r.json();
 }
 
+async function getRaceWithPredictions() {
+  const races = await sbGet('races?order=round.asc');
+  if (!races.length) throw new Error('No races in DB');
+  for (let i = races.length - 1; i >= 0; i--) {
+    const preds = await sbGet(`predictions?race_id=eq.${races[i].id}&limit=1`);
+    if (preds.length) return races[i];
+  }
+  throw new Error('No races with predictions found');
+}
+
 // ---- TABS ----
 function showTab(tab, btn) {
-  ['tests','results','whatsapp'].forEach(t => {
+  ['tests','results'].forEach(t => {
     document.getElementById(t+'Tab').classList.toggle('hidden', t !== tab);
   });
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   if (tab === 'results') { loadLastPublished(); loadResRounds(); }
-  if (tab === 'whatsapp') loadWaRounds();
 }
 
 // ---- RESULTS TAB ----
@@ -347,8 +337,15 @@ async function fetchPreview() {
     }).join('');
 
     const publishBtn = document.getElementById('publishBtn');
-    publishBtn.disabled = !hasQual || !hasRace;
-    publishBtn.title = !hasRace ? 'Race results not available yet' : '';
+    if (hasQual && hasRace) {
+      publishBtn.disabled = false;
+      publishBtn.className = 'btn amber';
+      publishBtn.textContent = '⚠ Publish Results to NigeBot';
+    } else {
+      publishBtn.disabled = true;
+      publishBtn.className = 'btn';
+      publishBtn.textContent = '✅ Publish Results to NigeBot';
+    }
 
     previewData = { season, round, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], preds, hasQual, hasRace };
     section.classList.remove('hidden');
@@ -388,6 +385,8 @@ async function publishResults() {
     await sbUpsert('published_log', { race_id:rid, race_name:raceName, published_at:new Date().toISOString() });
     msg.className = 'status-msg success';
     msg.textContent = `✅ Results published for ${raceName}! Scores are now live in NigeBot.`;
+    btn.className = 'btn green';
+    btn.textContent = `✅ Published — ${new Date().toLocaleString('en-GB', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}`;
     loadLastPublished();
   } catch(e) {
     msg.className = 'status-msg error'; msg.textContent = `❌ ${e.message}`;
@@ -395,34 +394,16 @@ async function publishResults() {
   }
 }
 
-// ---- WHATSAPP TAB ----
-async function loadWaRounds() {
-  const season = document.getElementById('waSeason').value;
-  const sel = document.getElementById('waRound');
-  sel.innerHTML = '<option value="">— loading —</option>';
-  try {
-    const races = await sbGet(`races?season=eq.${season}&order=round.asc`);
-    sel.innerHTML = races.length
-      ? races.map(r => `<option value="${r.round}" data-name="${r.name}">${r.round}. ${r.name}</option>`).join('')
-      : '<option value="">No races found</option>';
-  } catch(e) { sel.innerHTML = '<option value="">Failed to load</option>'; }
-}
-
+// ---- WHATSAPP (inline in Results tab) ----
 async function generateMessage() {
-  const season = document.getElementById('waSeason').value;
-  const roundSel = document.getElementById('waRound');
-  const round = roundSel.value;
-  const raceName = roundSel.selectedOptions[0]?.dataset.name || `Round ${round}`;
+  if (!previewData) return;
+  const { season, round, raceName, raceId, preds } = previewData;
   const status = document.getElementById('waStatus');
   const preview = document.getElementById('waPreview');
   preview.classList.add('hidden');
-  if (!round) { status.className='status-msg error'; status.textContent='Select a round first.'; status.classList.remove('hidden'); return; }
   status.className='status-msg info'; status.textContent='⏳ Gathering data...'; status.classList.remove('hidden');
 
   try {
-    const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
-    const raceId = raceRows?.[0]?.id;
-    if (!raceId) throw new Error('Race not found in DB');
     const [scores, allSeasonRaces] = await Promise.all([
       sbGet(`scores?race_id=eq.${raceId}&order=total_score.desc`),
       sbGet(`races?season=eq.${season}&order=round.asc`)
@@ -521,33 +502,29 @@ const testGroups = [
   {
     name: 'F1 API — Jolpica',
     tests: [
-      { name: 'Qualifying results available', detail: 'Fetches qualifying top 3 for the latest race in DB',
+      { name: 'Qualifying results available', detail: 'Fetches qualifying top 3 for the most recent race with predictions',
         run: async () => {
-          const races = await sbGet('races?order=round.asc');
-          if (!races.length) throw new Error('No races in DB');
-          const latest = races[races.length-1];
-          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${latest.season}/${latest.round}/qualifying/`);
+          const race = await getRaceWithPredictions();
+          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/qualifying/`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
-          const race = data.MRData.RaceTable.Races[0];
-          if (!race) throw new Error(`No data returned for ${latest.name} — results may not be published yet`);
-          const top3 = race.QualifyingResults.slice(0,3).map(d=>d.Driver.familyName);
+          const raceData = data.MRData.RaceTable.Races[0];
+          if (!raceData) throw new Error(`No data returned for ${race.name} — results may not be published yet`);
+          const top3 = raceData.QualifyingResults.slice(0,3).map(d=>d.Driver.familyName);
           if (top3.length<3) throw new Error(`Only ${top3.length} results returned`);
-          return `${latest.name}: P1: ${top3[0]}, P2: ${top3[1]}, P3: ${top3[2]}`;
+          return `${race.name}: P1: ${top3[0]}, P2: ${top3[1]}, P3: ${top3[2]}`;
         }},
-      { name: 'Race results available', detail: 'Fetches race top 3 for the latest race in DB',
+      { name: 'Race results available', detail: 'Fetches race top 3 for the most recent race with predictions',
         run: async () => {
-          const races = await sbGet('races?order=round.asc');
-          if (!races.length) throw new Error('No races in DB');
-          const latest = races[races.length-1];
-          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${latest.season}/${latest.round}/results/`);
+          const race = await getRaceWithPredictions();
+          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/results/`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
-          const race = data.MRData.RaceTable.Races[0];
-          if (!race) throw new Error(`No data returned for ${latest.name} — results may not be published yet`);
-          const top3 = race.Results.slice(0,3).map(d=>d.Driver.familyName);
+          const raceData = data.MRData.RaceTable.Races[0];
+          if (!raceData) throw new Error(`No data returned for ${race.name} — results may not be published yet`);
+          const top3 = raceData.Results.slice(0,3).map(d=>d.Driver.familyName);
           if (top3.length<3) throw new Error(`Only ${top3.length} results returned`);
-          return `${latest.name}: P1: ${top3[0]}, P2: ${top3[1]}, P3: ${top3[2]}`;
+          return `${race.name}: P1: ${top3[0]}, P2: ${top3[1]}, P3: ${top3[2]}`;
         }},
       { name: 'Season schedule reachable', detail: 'Fetches the full season calendar for the latest season in DB',
         run: async () => {
