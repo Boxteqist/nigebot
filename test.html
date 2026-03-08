@@ -75,7 +75,7 @@
 <body>
 
 <h1>🔧 NigeBot Man Cave</h1>
-<p class="subtitle">Admin tools — v1.2.5</p>
+<p class="subtitle">Admin tools — v1.2.6</p>
 
 <div class="tabs">
   <button class="tab active" onclick="showTab('tests',this)">🧪 Tests</button>
@@ -544,36 +544,19 @@ const testGroups = [
           if (!count) throw new Error('No races returned');
           return `${season}: ${count} races found`;
         }},
-      { name: 'Results available for rounds with predictions', detail: 'Checks Jolpica for every round that has predictions entered',
+      { name: 'Results available for current round', detail: 'Checks Jolpica for the most recent round with predictions',
         run: async () => {
-          const races = await sbGet('races?order=round.asc');
-          if (!races.length) throw new Error('No races in DB');
-          const racesWithPreds = [];
-          for (const race of races) {
-            const preds = await sbGet(`predictions?race_id=eq.${race.id}&limit=1`);
-            if (preds.length) racesWithPreds.push(race);
-          }
-          if (!racesWithPreds.length) throw new Error('No rounds with predictions found');
-          const lines = [];
-          let anyMissing = false;
-          for (const race of racesWithPreds) {
-            const [qRes, rRes] = await Promise.all([
-              fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/qualifying/`),
-              fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/results/`)
-            ]);
-            const qData = await qRes.json(), rData = await rRes.json();
-            const hasQ = !!qData.MRData.RaceTable.Races[0];
-            const hasR = !!rData.MRData.RaceTable.Races[0];
-            const status = hasQ && hasR ? '✅ Full results' : hasQ ? '⏳ Quali only' : '⏳ Pending';
-            if (!hasQ || !hasR) anyMissing = true;
-            lines.push(`${hasQ && hasR ? '✅' : '⏳'} R${race.round} ${race.name}: ${hasQ && hasR ? 'Full results' : hasQ ? 'Quali only' : 'Pending'}`);
-          }
-          // If some races have results and some don't, that's expected mid-season — not a hard fail
-          const allDone = !anyMissing;
-          const detail = lines.join(' | ');
-          if (allDone) return detail;
-          // Partial — throw with the detail so it shows, but prefix to explain
-          throw new Error(detail);
+          const race = await getRaceWithPredictions();
+          const [qRes, rRes] = await Promise.all([
+            fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/qualifying/`),
+            fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/results/`)
+          ]);
+          const qData = await qRes.json(), rData = await rRes.json();
+          const hasQ = !!qData.MRData.RaceTable.Races[0];
+          const hasR = !!rData.MRData.RaceTable.Races[0];
+          if (hasQ && hasR) return `${race.name}: Full results available`;
+          if (hasQ) throw new Error(`${race.name}: Qualifying available — race results pending`);
+          throw new Error(`${race.name}: No results available yet`);
         }},
     ]
   },
