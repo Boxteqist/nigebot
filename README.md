@@ -33,11 +33,12 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 
 ### For Admins (Tim & Ollie)
 1. Open Man Cave after the race weekend
-2. Go to **Tests** tab and run all tests — confirm Jolpica API is green and check which rounds have results available
+2. Go to **Tests** tab and run all tests — confirm Jolpica API is green and current round has full results
 3. Go to **Results** tab — select the season and round
-4. Hit **Fetch Results** and review the score preview for all players
-5. If everything looks correct, hit **Publish Results to NigeBot** — the button turns amber when ready, green once published with a timestamp
-6. Generate the WhatsApp message using the section below the score preview — edit if needed, copy and send
+4. Hit **Fetch Results** and review the score preview for all players (sorted highest to lowest)
+5. When ready, the **Publish Results to NigeBot** button turns amber — hit it to push scores live
+6. Button turns green with a timestamp once published — "Last published" also updates with race name and time
+7. Generate the WhatsApp message using the section below the score preview — edit if needed, copy and send
 
 ---
 
@@ -78,16 +79,36 @@ Points are awarded for predicting the top 3 in qualifying and the race.
 | `scores` | Calculated scores per player per race |
 | `published_log` | Timestamp log of when results were published |
 
+> `published_log` requires a unique constraint on `race_id`. If not present, run: `ALTER TABLE published_log ADD CONSTRAINT published_log_race_id_key UNIQUE (race_id);`
+
 ---
 
 ## Man Cave Test Suite
 
 The Tests tab runs a suite of checks across four groups:
 
-- **F1 API — Jolpica** — confirms the API is reachable using a known historical race, checks the season schedule, and reports results availability for every round that has predictions entered (per-round status shown in the detail)
+- **F1 API — Jolpica** — confirms the API is reachable using a known historical race, checks the season schedule, and checks whether the current round (most recent with predictions) has full results, qualifying only, or nothing yet
 - **Scoring Logic** — unit tests for exact matches, near-misses, driver code resolution, and full prediction scenarios
 - **Supabase Connection** — confirms read access to all five database tables
 - **Prediction Save & Update** — writes, updates, reads back, and cleans up a test prediction row
+
+## Score Preview
+
+The score preview in the Results tab shows all seven players sorted by score, highest first. Each prediction is colour-coded with a symbol:
+
+- `✓` green — exact match
+- `~` amber — one position off (half points)
+- `✗` grey — miss or driver not in top 3
+
+## Publish Button States
+
+| State | Colour | Meaning |
+|-------|--------|---------|
+| 🔒 Publish Results to NigeBot | Grey | Results not yet available |
+| ⚠️ Publish Results to NigeBot | Amber | Ready to publish |
+| ✅ Published — date, time | Green | Published successfully |
+
+> Re-publishing is allowed and will overwrite scores and update the timestamp.
 
 ---
 
