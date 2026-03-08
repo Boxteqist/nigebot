@@ -26,7 +26,7 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 ## How It Works
 
 ### For Players
-1. Open NigeBot before qualifying starts
+1. Open NigeBot — the most recently published race loads automatically
 2. Enter your top 3 predictions for qualifying and the race using 3-letter driver codes (e.g. `VER`, `HAM`, `NOR`)
 3. Hit **Save All Predictions** — predictions lock automatically when qualifying begins
 4. Check back after the race weekend — results and scores will be published here and shared on WhatsApp
