@@ -75,7 +75,7 @@
 <body>
 
 <h1>🔧 NigeBot Man Cave</h1>
-<p class="subtitle">Admin tools — v1.2.3</p>
+<p class="subtitle">Admin tools — v1.2.5</p>
 
 <div class="tabs">
   <button class="tab active" onclick="showTab('tests',this)">🧪 Tests</button>
@@ -124,15 +124,15 @@
       <div class="results-actual">
         <div>
           <div class="section-title">Qualifying</div>
-          <div class="pos-row">P1 — <strong id="aqr1">—</strong></div>
-          <div class="pos-row">P2 — <strong id="aqr2">—</strong></div>
-          <div class="pos-row">P3 — <strong id="aqr3">—</strong></div>
+          <div class="pos-row">P1 — <strong id="aqr1" style="color:#ffd700">—</strong></div>
+          <div class="pos-row">P2 — <strong id="aqr2" style="color:#c0c0c0">—</strong></div>
+          <div class="pos-row">P3 — <strong id="aqr3" style="color:#cd7f32">—</strong></div>
         </div>
         <div>
           <div class="section-title">Race</div>
-          <div class="pos-row">P1 — <strong id="arr1">—</strong></div>
-          <div class="pos-row">P2 — <strong id="arr2">—</strong></div>
-          <div class="pos-row">P3 — <strong id="arr3">—</strong></div>
+          <div class="pos-row">P1 — <strong id="arr1" style="color:#ffd700">—</strong></div>
+          <div class="pos-row">P2 — <strong id="arr2" style="color:#c0c0c0">—</strong></div>
+          <div class="pos-row">P3 — <strong id="arr3" style="color:#cd7f32">—</strong></div>
         </div>
       </div>
     </div>
@@ -293,12 +293,12 @@ async function fetchPreview() {
     const hasQual = !!qTop3, hasRace = !!rTop3;
 
     if (hasQual) {
-      ['qr1','qr2','qr3'].forEach((id,i) => { const el=document.getElementById('a'+id); el.textContent=qTop3[i]; el.style.color=''; });
+      ['qr1','qr2','qr3'].forEach((id,i) => { document.getElementById('a'+id).textContent=qTop3[i]; });
     } else {
       ['qr1','qr2','qr3'].forEach(id => { document.getElementById('a'+id).textContent='—'; });
     }
     if (hasRace) {
-      ['rr1','rr2','rr3'].forEach((id,i) => { const el=document.getElementById('a'+id); el.textContent=rTop3[i]; el.style.color=''; });
+      ['rr1','rr2','rr3'].forEach((id,i) => { document.getElementById('a'+id).textContent=rTop3[i]; });
     } else {
       ['rr1','rr2','rr3'].forEach(id => { const el=document.getElementById('a'+id); el.textContent='Pending'; el.style.color='#ffaa44'; });
     }
@@ -310,21 +310,28 @@ async function fetchPreview() {
     if (raceId) preds = await sbGet(`predictions?race_id=eq.${raceId}`);
 
     const grid = document.getElementById('previewGrid');
-    grid.innerHTML = PLAYERS.map(player => {
+    const playerScores = PLAYERS.map(player => {
       const p = preds.find(x => x.player_name === player);
       const qPreds = p ? [p.quali_p1,p.quali_p2,p.quali_p3] : [null,null,null];
       const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
       const qScore = hasQual ? calcScore(qPreds, qTop3, QUALI_PTS) : null;
       const rScore = hasRace ? calcScore(rPreds, rTop3, RACE_PTS)  : null;
       const total  = (qScore||0) + (rScore||0);
+      return { player, p, qPreds, rPreds, qScore, rScore, total };
+    }).sort((a,b) => b.total - a.total);
+
+    grid.innerHTML = playerScores.map(({ player, qPreds, rPreds, qScore, rScore, total }) => {
 
       const predLine = (pred, actual, label) => {
         if (!actual) return `<div class="pred-line miss"><span class="pos-label">${label}</span><span class="driver" style="color:#ffaa44">${pred||'—'} ⏳</span></div>`;
         if (!pred) return `<div class="pred-line miss"><span class="pos-label">${label}</span><span class="driver">—</span></div>`;
         const ni = actual.findIndex(r => norm(r) === norm(pred));
         const pi = ['P1','P2','P3'].indexOf(label);
-        let cls = ni===pi ? 'exact' : (ni!==-1 && Math.abs(ni-pi)===1 ? 'close' : 'miss');
-        return `<div class="pred-line ${cls}"><span class="pos-label">${label}</span><span class="driver">${pred}</span></div>`;
+        let cls, symbol;
+        if (ni === pi) { cls = 'exact'; symbol = '✓ '; }
+        else if (ni !== -1 && Math.abs(ni - pi) === 1) { cls = 'close'; symbol = '~ '; }
+        else { cls = 'miss'; symbol = '✗ '; }
+        return `<div class="pred-line ${cls}"><span class="pos-label">${label}</span><span class="driver">${symbol}${pred}</span></div>`;
       };
 
       return `<div class="preview-card">
@@ -340,11 +347,15 @@ async function fetchPreview() {
     if (hasQual && hasRace) {
       publishBtn.disabled = false;
       publishBtn.className = 'btn amber';
-      publishBtn.textContent = '⚠ Publish Results to NigeBot';
+      publishBtn.style = '';
+      publishBtn.textContent = '⚠️ Publish Results to NigeBot';
     } else {
       publishBtn.disabled = true;
       publishBtn.className = 'btn';
-      publishBtn.textContent = '✅ Publish Results to NigeBot';
+      publishBtn.style.background = '#2a2a3a';
+      publishBtn.style.color = '#666';
+      publishBtn.style.cursor = 'not-allowed';
+      publishBtn.textContent = '🔒 Publish Results to NigeBot';
     }
 
     previewData = { season, round, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], preds, hasQual, hasRace };
@@ -537,7 +548,6 @@ const testGroups = [
         run: async () => {
           const races = await sbGet('races?order=round.asc');
           if (!races.length) throw new Error('No races in DB');
-          // Find all races with at least one prediction
           const racesWithPreds = [];
           for (const race of races) {
             const preds = await sbGet(`predictions?race_id=eq.${race.id}&limit=1`);
@@ -556,10 +566,14 @@ const testGroups = [
             const hasR = !!rData.MRData.RaceTable.Races[0];
             const status = hasQ && hasR ? '✅ Full results' : hasQ ? '⏳ Quali only' : '⏳ Pending';
             if (!hasQ || !hasR) anyMissing = true;
-            lines.push(`R${race.round} ${race.name}: ${status}`);
+            lines.push(`${hasQ && hasR ? '✅' : '⏳'} R${race.round} ${race.name}: ${hasQ && hasR ? 'Full results' : hasQ ? 'Quali only' : 'Pending'}`);
           }
-          if (anyMissing) throw new Error(lines.join(' | '));
-          return lines.join(' | ');
+          // If some races have results and some don't, that's expected mid-season — not a hard fail
+          const allDone = !anyMissing;
+          const detail = lines.join(' | ');
+          if (allDone) return detail;
+          // Partial — throw with the detail so it shows, but prefix to explain
+          throw new Error(detail);
         }},
     ]
   },
