@@ -108,7 +108,7 @@
     <h1>NigeBot</h1>
     <span>Park Estate F1 Predictions</span>
   </div>
-  <div style="font-size:0.75rem;color:rgba(255,255,255,0.6);align-self:flex-end;padding-bottom:2px;">v1.1.0</div>
+  <div style="font-size:0.75rem;color:rgba(255,255,255,0.6);align-self:flex-end;padding-bottom:2px;">v1.2.0</div>
 </header>
 
 <div class="container">
@@ -609,6 +609,16 @@ async function loadLastPublished() {
     if (rows?.length) {
       const d = new Date(rows[0].published_at);
       el.textContent = `${d.toLocaleString('en-GB')} — ${rows[0].race_name}`;
+      // Auto-select the most recently published race
+      const raceRow = await sbGet(`races?id=eq.${rows[0].race_id}`);
+      if (raceRow?.length) {
+        const { season, round } = raceRow[0];
+        const seasonSel = document.getElementById('seasonSel');
+        seasonSel.value = season;
+        await loadRaces();
+        document.getElementById('raceSel').value = round;
+        await onRaceChange();
+      }
     } else {
       el.textContent = 'No results published yet';
     }
