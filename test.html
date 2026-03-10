@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NigeBot Man Cave</title>
+<script src="version.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0f0f13; color: #f0f0f0; font-family: 'Segoe UI', sans-serif; padding: 24px; }
@@ -75,7 +76,7 @@
 <body>
 
 <h1>🔧 NigeBot Man Cave</h1>
-<p class="subtitle">Admin tools — v1.2.6</p>
+<p class="subtitle">Admin tools — <span id="manCaveVersion"></span></p>
 
 <div class="tabs">
   <button class="tab active" onclick="showTab('tests',this)">🧪 Tests</button>
@@ -165,6 +166,15 @@ const DRIVER_CODES = {
   'MAG':'Magnussen','TSU':'Tsunoda','LAW':'Lawson','ALB':'Albon',
   'BEA':'Bearman','HAD':'Hadjar','DOO':'Doohan','BOR':'Bortoleto','COL':'Colapinto'
 };
+
+// Set Man Cave version label from shared version file
+(function setManCaveVersion() {
+  const el = document.getElementById('manCaveVersion');
+  if (!el) return;
+  el.textContent = typeof window.NIGEBOT_VERSION === 'string'
+    ? `v${window.NIGEBOT_VERSION}`
+    : 'vDEV';
+})();
 
 function norm(s) {
   if (!s) return '';
