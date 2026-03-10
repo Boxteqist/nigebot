@@ -93,6 +93,15 @@ There is also **Crofty’s Split — Points Breakdown**, which shows, for each p
 | Charts | Chart.js |
 | Hosting | GitHub Pages |
 
+### Versioning
+
+The version shown in the NigeBot and Man Cave headers comes from `window.NIGEBOT_VERSION` in `version.js`. On each push to `main`, the GitHub Actions workflow rewrites this file with:
+
+- A base version from `BASE_VERSION` in `.github/workflows/deploy.yml` (for example, `1.5.0`)
+- An auto-incrementing build number: `1.5.0+build.<GitHub run number>`
+
+To bump the major/minor version, update `BASE_VERSION` in the workflow and push to `main`.
+
 ### Database Tables
 
 | Table | Description |

@@ -4,6 +4,10 @@ on:
   push:
     branches: [ main ]
 
+env:
+  # Base app version; bump this manually when you want a major/minor change.
+  BASE_VERSION: 1.5.0
+
 permissions:
   contents: read
   pages: write
@@ -21,14 +25,9 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          # Use latest tag if exists, else short SHA
-          if git describe --tags --abbrev=0 >/dev/null 2>&1; then
-            TAG=$(git describe --tags --abbrev=0)
-            VERSION="${TAG#v}"   # strip leading v
-          else
-            SHA=$(git rev-parse --short HEAD)
-            VERSION="0.0.0+${SHA}"
-          fi
+          # Auto-incrementing version on every deploy.
+          # BASE_VERSION is defined at the workflow level above.
+          VERSION="${BASE_VERSION}+build.${GITHUB_RUN_NUMBER}"
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "Using version: ${VERSION}"
 
