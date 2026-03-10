@@ -133,6 +133,7 @@
           <div class="pos-row">P1 — <strong id="arr1" style="color:#ffd700">—</strong></div>
           <div class="pos-row">P2 — <strong id="arr2" style="color:#c0c0c0">—</strong></div>
           <div class="pos-row">P3 — <strong id="arr3" style="color:#cd7f32">—</strong></div>
+          <div class="pos-row">Fastest Lap — <strong id="arr_fl">—</strong></div>
         </div>
       </div>
     </div>
@@ -145,24 +146,6 @@
       </div>
       <div id="publishMsg" class="status-msg hidden"></div>
     </div>
-
-    <!-- WHATSAPP SECTION (inline) -->
-    <div class="card" id="waSection">
-      <h2>💬 Generate WhatsApp Message</h2>
-      <label class="field-label">Extra context (optional)</label>
-      <textarea id="waContext" rows="3" placeholder="e.g. Ollie was at the race in Melbourne. Verstappen had a nightmare in qualifying and started P17..." style="margin-bottom:12px"></textarea>
-      <button class="btn" onclick="generateMessage()">💬 Generate Message</button>
-      <div id="waStatus" class="status-msg hidden"></div>
-      <div id="waPreview" class="hidden" style="margin-top:14px">
-        <p style="color:#888;font-size:0.78rem;margin-bottom:10px;">Edit before sending if needed.</p>
-        <textarea id="waText" rows="14"></textarea>
-        <div style="display:flex;gap:10px;margin-top:12px;">
-          <button class="btn" style="flex:1" onclick="copyMessage()">📋 Copy to Clipboard</button>
-          <button class="btn grey" style="flex:1" onclick="generateMessage()">🔄 Regenerate</button>
-        </div>
-        <div id="copyConfirm" class="status-msg success hidden">✅ Copied!</div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -172,6 +155,7 @@ const SB_KEY = 'sb_publishable_dkJN0bxvkkW7JHXAvZ62XQ_tpxexARU';
 const hdrs = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
 const QUALI_PTS = [12.5, 9, 7.5];
 const RACE_PTS  = [25, 18, 15];
+const FASTEST_LAP_PTS = 10;
 const PLAYERS   = ['Ollie','Tom','Tim','Ralph','Herbie','Dave','Jason'];
 
 const DRIVER_CODES = {
@@ -292,6 +276,18 @@ async function fetchPreview() {
     const rTop3 = rRace ? rRace.Results.slice(0,3).map(d => d.Driver.familyName) : null;
     const hasQual = !!qTop3, hasRace = !!rTop3;
 
+    let fastestLapDriver = null;
+    if (hasRace) {
+      try {
+        const flRes = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/fastest/1/`);
+        const flData = await flRes.json();
+        const fl = flData.MRData.RaceTable.Races[0]?.Results?.[0];
+        fastestLapDriver = fl ? fl.Driver.familyName : null;
+      } catch(e) {
+        fastestLapDriver = null;
+      }
+    }
+
     if (hasQual) {
       ['qr1','qr2','qr3'].forEach((id,i) => { document.getElementById('a'+id).textContent=qTop3[i]; });
     } else {
@@ -302,6 +298,10 @@ async function fetchPreview() {
     } else {
       ['rr1','rr2','rr3'].forEach(id => { const el=document.getElementById('a'+id); el.textContent='Pending'; el.style.color='#ffaa44'; });
     }
+
+    // Show fastest lap under Race column; Round 1 shows a hyphen because we don't count it
+    const flLabel = parseInt(round,10) === 1 ? '—' : (fastestLapDriver || '—');
+    document.getElementById('arr_fl').textContent = flLabel;
 
     const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
     const raceId   = raceRows?.[0]?.id;
@@ -316,11 +316,15 @@ async function fetchPreview() {
       const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
       const qScore = hasQual ? calcScore(qPreds, qTop3, QUALI_PTS) : null;
       const rScore = hasRace ? calcScore(rPreds, rTop3, RACE_PTS)  : null;
-      const total  = (qScore||0) + (rScore||0);
-      return { player, p, qPreds, rPreds, qScore, rScore, total };
+      const flPred = p ? p.fastest_lap : null;
+      const flScore = (parseInt(round,10) > 1 && hasRace && fastestLapDriver && flPred && norm(flPred) === norm(fastestLapDriver))
+        ? FASTEST_LAP_PTS
+        : 0;
+      const total  = (qScore||0) + (rScore||0) + flScore;
+      return { player, p, qPreds, rPreds, qScore, rScore, flPred, flScore, total };
     }).sort((a,b) => b.total - a.total);
 
-    grid.innerHTML = playerScores.map(({ player, qPreds, rPreds, qScore, rScore, total }) => {
+    grid.innerHTML = playerScores.map(({ player, qPreds, rPreds, qScore, rScore, flPred, flScore, total }) => {
 
       const predLine = (pred, actual, label) => {
         if (!actual) return `<div class="pred-line miss"><span class="pos-label">${label}</span><span class="driver" style="color:#ffaa44">${pred||'—'} ⏳</span></div>`;
@@ -340,6 +344,8 @@ async function fetchPreview() {
         ${predLine(qPreds[0],qTop3,'P1')}${predLine(qPreds[1],qTop3,'P2')}${predLine(qPreds[2],qTop3,'P3')}
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Race (${rScore!==null?rScore:'pending'})</div>
         ${predLine(rPreds[0],rTop3,'P1')}${predLine(rPreds[1],rTop3,'P2')}${predLine(rPreds[2],rTop3,'P3')}
+        <div class="section-title" style="font-size:0.68rem;margin-top:8px">Fastest Lap (${parseInt(round,10)>1 ? (fastestLapDriver ? (flScore ? flScore+' pts' : '0 pts') : 'unavailable') : 'not used'})</div>
+        <div class="pred-line ${flScore? 'exact':'miss'}"><span class="pos-label">FL</span><span class="driver">${flPred||'—'}${flScore? ' ✓':''}</span></div>
       </div>`;
     }).join('');
 
@@ -358,7 +364,7 @@ async function fetchPreview() {
       publishBtn.textContent = '🔒 Publish Results to NigeBot';
     }
 
-    previewData = { season, round, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], preds, hasQual, hasRace };
+    previewData = { season, round, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], preds, hasQual, hasRace, fastestLapDriver };
     section.classList.remove('hidden');
     msg.className = hasQual && hasRace ? 'status-msg success' : 'status-msg info';
     msg.textContent = hasQual && hasRace
@@ -371,7 +377,7 @@ async function fetchPreview() {
 
 async function publishResults() {
   if (!previewData) return;
-  const { season, round, raceId, raceName, qTop3, rTop3, preds } = previewData;
+  const { season, round, raceId, raceName, qTop3, rTop3, preds, fastestLapDriver } = previewData;
   const btn = document.getElementById('publishBtn');
   const msg = document.getElementById('publishMsg');
   btn.disabled = true;
@@ -383,14 +389,32 @@ async function publishResults() {
       rid = upserted?.[0]?.id;
     }
     if (!rid) throw new Error('Could not resolve race ID');
-    await sbUpsert('results', { race_id:rid, quali_p1:qTop3[0], quali_p2:qTop3[1], quali_p3:qTop3[2], race_p1:rTop3[0], race_p2:rTop3[1], race_p3:rTop3[2], fetched_at:new Date().toISOString() });
+    await sbUpsert('results', {
+      race_id:rid,
+      quali_p1:qTop3[0], quali_p2:qTop3[1], quali_p3:qTop3[2],
+      race_p1:rTop3[0],  race_p2:rTop3[1],  race_p3:rTop3[2],
+      fastest_lap: parseInt(round,10) > 1 ? fastestLapDriver : null,
+      fetched_at:new Date().toISOString()
+    });
     const scoreRows = PLAYERS.map(player => {
       const p = preds.find(x => x.player_name === player);
       const qPreds = p ? [p.quali_p1,p.quali_p2,p.quali_p3] : [null,null,null];
       const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
       const qs = calcScore(qPreds, qTop3, QUALI_PTS);
       const rs = calcScore(rPreds, rTop3, RACE_PTS);
-      return { player_name:player, race_id:rid, quali_score:qs, race_score:rs, total_score:qs+rs, calculated_at:new Date().toISOString() };
+      const flPred = p ? p.fastest_lap : null;
+      const flScore = (parseInt(round,10) > 1 && fastestLapDriver && flPred && norm(flPred) === norm(fastestLapDriver))
+        ? FASTEST_LAP_PTS
+        : 0;
+      return {
+        player_name:player,
+        race_id:rid,
+        quali_score:qs,
+        race_score:rs,
+        fastest_lap_score: flScore,
+        total_score:qs+rs+flScore,
+        calculated_at:new Date().toISOString()
+      };
     });
     await sbUpsert('scores', scoreRows);
     await sbUpsert('published_log', { race_id:rid, race_name:raceName, published_at:new Date().toISOString() });
@@ -475,7 +499,7 @@ Tone: dry British banter, wicked but harmless sense of humour. Occasionally take
 Race data:
 - Qualifying top 3: ${qTop3.join(', ')||'unavailable'}
 - Race top 3: ${rTop3.join(', ')||'unavailable'}
-- Fastest lap: ${fastestLapStr||'unavailable'}
+- Fastest lap: ${fastestLapStr || (parseInt(round,10) === 1 ? 'not used for Round 1' : 'unavailable')}
 ${extraContext?`\nExtra context from the admin (weave this in naturally):\n${extraContext}`:''}
 
 Prediction scores this round (ordered by score):
@@ -577,6 +601,20 @@ const testGroups = [
         run: () => { const s=calcScore(['VER','PIA','HAM'],['Verstappen','Piastri','Hamilton'],QUALI_PTS); if(s!==29) throw new Error(`Expected 29, got ${s}`); }},
       { name: "Full race prediction — Tim's Australia picks", detail: 'HAM P1, VER P2, ANT P3 vs actual results',
         run: () => { const s=calcScore(['HAM','VER','ANT'],['Hamilton','Verstappen','Antonelli'],RACE_PTS); if(s!==58) throw new Error(`Expected 58, got ${s}`); }},
+      { name: 'Fastest lap — correct call', detail: 'Matching fastest lap prediction gives 10 pts (R2+ only)',
+        run: () => {
+          const fastestLapDriver = 'Verstappen';
+          const pred = { fastest_lap: 'VER' }; // driver code
+          const score = norm(pred.fastest_lap) === norm(fastestLapDriver) ? FASTEST_LAP_PTS : 0;
+          if (score !== 10) throw new Error(`Expected 10, got ${score}`);
+        }},
+      { name: 'Fastest lap — miss', detail: 'Non-matching fastest lap prediction gives 0 pts',
+        run: () => {
+          const fastestLapDriver = 'Verstappen';
+          const pred = { fastest_lap: 'NOR' }; // wrong driver
+          const score = norm(pred.fastest_lap) === norm(fastestLapDriver) ? FASTEST_LAP_PTS : 0;
+          if (score !== 0) throw new Error(`Expected 0, got ${score}`);
+        }},
     ]
   },
   {
@@ -585,6 +623,13 @@ const testGroups = [
       { name: 'Can connect to Supabase', detail: 'Basic read from races table', run: async () => { await sbGet('races?limit=1'); }},
       { name: 'Can read predictions table', detail: 'Fetch from predictions table', run: async () => { await sbGet('predictions?limit=1'); }},
       { name: 'Can read scores table', detail: 'Fetch from scores table', run: async () => { await sbGet('scores?limit=1'); }},
+      { name: 'scores has fastest_lap_score column', detail: 'Ensures fastest_lap_score is present in scores table',
+        run: async () => {
+          const rows = await sbGet('scores?limit=1');
+          if (rows.length && !('fastest_lap_score' in rows[0])) {
+            throw new Error('fastest_lap_score column missing from scores');
+          }
+        }},
       { name: 'Can read results table', detail: 'Fetch from results table', run: async () => { await sbGet('results?limit=1'); }},
       { name: 'Can read published_log table', detail: 'Fetch from published_log table', run: async () => { await sbGet('published_log?limit=1'); }},
     ]

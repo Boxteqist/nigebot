@@ -155,23 +155,6 @@
     <div id="noRaceMsg" style="text-align:center;color:#888;font-size:0.9rem;padding:40px 0;">
       👆 Select a season and race above to enter predictions
     </div>
-    <div class="card">
-      <h2>F1 Results</h2>
-      <div class="results-row">
-        <div>
-          <div class="section-title">Qualifying</div>
-          <div class="pos-group"><label>P1</label><div class="badge grey" id="qr1">—</div></div>
-          <div class="pos-group"><label>P2</label><div class="badge grey" id="qr2">—</div></div>
-          <div class="pos-group"><label>P3</label><div class="badge grey" id="qr3">—</div></div>
-        </div>
-        <div>
-          <div class="section-title">Race</div>
-          <div class="pos-group"><label>P1</label><div class="badge grey" id="rr1">—</div></div>
-          <div class="pos-group"><label>P2</label><div class="badge grey" id="rr2">—</div></div>
-          <div class="pos-group"><label>P3</label><div class="badge grey" id="rr3">—</div></div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- RESULTS TAB -->
@@ -195,6 +178,7 @@
             <div class="pos-row">P1 — <strong id="res_rr1" style="color:#ffd700">—</strong></div>
             <div class="pos-row">P2 — <strong id="res_rr2" style="color:#c0c0c0">—</strong></div>
             <div class="pos-row">P3 — <strong id="res_rr3" style="color:#cd7f32">—</strong></div>
+            <div class="pos-row">Fastest Lap — <strong id="res_fl">—</strong></div>
           </div>
         </div>
       </div>
@@ -237,7 +221,7 @@
   <div id="scoringTab" class="hidden">
     <div class="card">
       <h2>How Scoring Works</h2>
-      <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">Each race weekend you predict the top 3 in qualifying and the top 3 in the race. Points are awarded as follows:</p>
+      <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">Each race weekend you predict the top 3 in qualifying and the top 3 in the race. From Round 2 onwards you also predict the fastest lap in the race. Points are awarded as follows:</p>
       <div class="two-col" style="margin-bottom:20px;">
         <div>
           <div class="section-title">Qualifying</div>
@@ -258,6 +242,7 @@
               <tr><td style="padding:8px;color:#ffd700">🥇 P1</td><td style="padding:8px">25 pts</td><td style="padding:8px;color:#888">12.5 pts</td></tr>
               <tr><td style="padding:8px;color:#c0c0c0">🥈 P2</td><td style="padding:8px">18 pts</td><td style="padding:8px;color:#888">9 pts</td></tr>
               <tr><td style="padding:8px;color:#cd7f32">🥉 P3</td><td style="padding:8px">15 pts</td><td style="padding:8px;color:#888">7.5 pts</td></tr>
+              <tr><td style="padding:8px;">⚡ Fastest Lap (R2+)</td><td style="padding:8px">10 pts</td><td style="padding:8px;color:#888">0 pts</td></tr>
             </tbody>
           </table>
         </div>
@@ -265,7 +250,8 @@
       <div style="background:#0f0f13;border-radius:10px;padding:14px;font-size:0.85rem;line-height:1.8;border:1px solid #2a2a3a;">
         <p style="margin-bottom:8px">✅ <strong>Exact match</strong> — you predicted a driver in the correct position, you get the full points for that position.</p>
         <p style="margin-bottom:8px">🔁 <strong>One position off</strong> — you predicted a driver one place out (e.g. predicted P1, they finished P2), you get <strong>half</strong> the points for where they actually finished.</p>
-        <p>❌ <strong>Two or more positions off</strong> — no points. If a driver doesn't finish in the top 3 at all, no points either.</p>
+        <p style="margin-bottom:8px">❌ <strong>Two or more positions off</strong> — no points. If a driver doesn't finish in the top 3 at all, no points either.</p>
+        <p>⚡ <strong>Fastest lap (from Round 2)</strong> — 10 points if you name the fastest-lap driver correctly, otherwise 0. Australia (Round 1) does not use fastest lap.</p>
       </div>
       <div style="background:#1a1a2a;border-radius:10px;padding:14px;font-size:0.85rem;margin-top:12px;border:1px solid #2a2a3a;color:#aaa;">
         💡 <strong>Example:</strong> You predict Hamilton for P1 in the race. He finishes P2. You get half of the P2 points — <strong>9 points</strong>.
@@ -322,6 +308,7 @@ const CALENDAR_2026 = [
 
 let currentRaceId = null;
 let currentQualiAt = null;
+let currentRound = null;
 let allRaces = [];
 let pointsChartInst = null;
 let isDirty = false;
@@ -399,6 +386,7 @@ async function onRaceChange() {
   const season = document.getElementById('seasonSel').value;
   const race = allRaces.find(r => r.round == round);
   if (!race) return;
+  currentRound = parseInt(round,10);
   raceStatus.className = 'status-msg info';
   raceStatus.textContent = '⏳ Loading race...';
   raceStatus.classList.remove('hidden');
@@ -425,7 +413,6 @@ async function onRaceChange() {
     renderPredGrid();
     applyLockState();
     await loadExistingPredictions();
-    loadExistingResults();
     isDirty = false;
     document.querySelectorAll('#predGrid input').forEach(el => el.addEventListener('input', () => isDirty = true));
   } catch(e) {
@@ -442,7 +429,7 @@ function renderPredGrid() {
       `<option value="${code}">${DRIVER_CODES[code]}</option>`).join('');
     document.body.appendChild(dl);
   }
-  const inp = (id, ph) => `<input id="${id}" type="text" placeholder="${ph}" list="driverList" autocomplete="off" maxlength="3" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" onblur="validateDriver(this)" />`;
+  const inp = (id, ph, extraAttrs = '') => `<input id="${id}" type="text" placeholder="${ph}" list="driverList" autocomplete="off" maxlength="3" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()" onblur="validateDriver(this)" ${extraAttrs} />`;
   document.getElementById('predGrid').innerHTML = PLAYERS.map(p => `
     <div class="player-pred-card">
       <h3>${p}</h3>
@@ -450,6 +437,12 @@ function renderPredGrid() {
       ${inp(`${p}_q1`,'P1')}${inp(`${p}_q2`,'P2')}${inp(`${p}_q3`,'P3')}
       <div class="section-title" style="margin-top:4px">Race</div>
       ${inp(`${p}_r1`,'P1')}${inp(`${p}_r2`,'P2')}${inp(`${p}_r3`,'P3')}
+      <div class="section-title" style="margin-top:4px">Fastest Lap</div>
+      ${
+        currentRound === 1
+          ? `<div style="font-size:0.8rem;color:#888;">unavailable for Australia</div>`
+          : inp(`${p}_fl`,'Driver code')
+      }
     </div>`).join('');
 }
 
@@ -467,19 +460,8 @@ async function loadExistingPredictions() {
   preds.forEach(p => {
     setVal(`${p.player_name}_q1`,p.quali_p1); setVal(`${p.player_name}_q2`,p.quali_p2); setVal(`${p.player_name}_q3`,p.quali_p3);
     setVal(`${p.player_name}_r1`,p.race_p1);  setVal(`${p.player_name}_r2`,p.race_p2);  setVal(`${p.player_name}_r3`,p.race_p3);
+    setVal(`${p.player_name}_fl`,p.fastest_lap);
   });
-}
-
-async function loadExistingResults() {
-  if (!currentRaceId) return;
-  const res = await sbGet(`results?race_id=eq.${currentRaceId}`);
-  if (res?.[0]) {
-    const r = res[0];
-    setBadge('qr1',r.quali_p1); setBadge('qr2',r.quali_p2); setBadge('qr3',r.quali_p3);
-    setBadge('rr1',r.race_p1);  setBadge('rr2',r.race_p2);  setBadge('rr3',r.race_p3);
-  } else {
-    ['qr1','qr2','qr3','rr1','rr2','rr3'].forEach(id => { const el=document.getElementById(id); el.textContent='—'; el.className='badge grey'; });
-  }
 }
 
 function setVal(id,val) { const el=document.getElementById(id); if(el&&val) el.value=val; }
@@ -495,12 +477,17 @@ async function savePredictions() {
       const val = getVal(`${p}_${f}`);
       if (val && !DRIVER_CODES[val.toUpperCase()]) invalid.push(`${p}: ${val}`);
     });
+    if (currentRound && currentRound > 1) {
+      const fl = getVal(`${p}_fl`);
+      if (fl && !DRIVER_CODES[fl.toUpperCase()]) invalid.push(`${p}: ${fl} (fastest lap)`);
+    }
   });
   if (invalid.length) { showStatus('saveStatus','error',`❌ Invalid driver codes: ${invalid.join(', ')}`); return; }
   const rows = PLAYERS.map(p => ({
     race_id: currentRaceId, player_name: p,
     quali_p1:getVal(`${p}_q1`).toUpperCase(),quali_p2:getVal(`${p}_q2`).toUpperCase(),quali_p3:getVal(`${p}_q3`).toUpperCase(),
     race_p1:getVal(`${p}_r1`).toUpperCase(),race_p2:getVal(`${p}_r2`).toUpperCase(),race_p3:getVal(`${p}_r3`).toUpperCase(),
+    fastest_lap: currentRound && currentRound > 1 ? getVal(`${p}_fl`).toUpperCase() : null,
     submitted_at: new Date().toISOString()
   }));
   const res = await sbUpsert('predictions', rows);
@@ -554,11 +541,13 @@ async function loadResultsForRace() {
     document.getElementById('res_rr1').textContent = r.race_p1 || '—';
     document.getElementById('res_rr2').textContent = r.race_p2 || '—';
     document.getElementById('res_rr3').textContent = r.race_p3 || '—';
+    document.getElementById('res_fl').textContent = r.fastest_lap || '—';
     document.getElementById('resultsActual').classList.remove('hidden');
 
     const qTop3 = [r.quali_p1, r.quali_p2, r.quali_p3];
     const rTop3 = [r.race_p1, r.race_p2, r.race_p3];
     const hasRace = !!r.race_p1;
+    const fastLapDriver = r.fastest_lap || null;
 
     const predLine = (pred, actual, label) => {
       if (!pred) return `<div class="pred-line miss"><span class="pos-label">${label}</span><span class="driver">—</span></div>`;
@@ -576,12 +565,19 @@ async function loadResultsForRace() {
       const p = preds.find(x => x.player_name === s.player_name);
       const qPreds = p ? [p.quali_p1, p.quali_p2, p.quali_p3] : [null,null,null];
       const rPreds = p ? [p.race_p1, p.race_p2, p.race_p3]    : [null,null,null];
+      const flPred = p ? p.fastest_lap : null;
+      const flHit = fastLapDriver && flPred && norm(flPred) === norm(fastLapDriver);
       return `<div class="score-card">
         <h3>${s.player_name} <span>${s.total_score} pts</span></h3>
         <div class="section-title" style="font-size:0.68rem">Qualifying (${s.quali_score})</div>
         ${predLine(qPreds[0],qTop3,'P1')}${predLine(qPreds[1],qTop3,'P2')}${predLine(qPreds[2],qTop3,'P3')}
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Race (${s.race_score})</div>
         ${predLine(rPreds[0],rTop3,'P1')}${predLine(rPreds[1],rTop3,'P2')}${predLine(rPreds[2],rTop3,'P3')}
+        <div class="section-title" style="font-size:0.68rem;margin-top:8px">Fastest Lap</div>
+        <div class="pred-line ${flHit ? 'exact' : 'miss'}">
+          <span class="pos-label">FL</span>
+          <span class="driver">${flPred || '—'}${flHit ? ' ✓' : ''}</span>
+        </div>
       </div>`;
     }).join('');
     document.getElementById('scoreGridCard').style.display = 'block';
@@ -622,11 +618,26 @@ async function loadSeason() {
   const preds  = await sbGet(`predictions?race_id=in.(${ids})`);
   const results = await sbGet(`results?race_id=in.(${ids})`);
 
-  const totFlat={}, qualiTots={}, raceTots={}, missedCounts={}, poleHits={}, winHits={};
-  PLAYERS.forEach(p=>{ totFlat[p]=0; qualiTots[p]=0; raceTots[p]=0; missedCounts[p]=0; poleHits[p]=0; winHits[p]=0; });
-  scores.forEach(s=>{ if(totFlat[s.player_name]!==undefined){ totFlat[s.player_name]+=s.total_score; qualiTots[s.player_name]+=s.quali_score; raceTots[s.player_name]+=s.race_score; }});
+  const totFlat={}, qualiTots={}, raceTots={}, fastLapTots={}, missedCounts={}, poleHits={}, winHits={}, fastLapHits={};
+  PLAYERS.forEach(p=>{ totFlat[p]=0; qualiTots[p]=0; raceTots[p]=0; fastLapTots[p]=0; missedCounts[p]=0; poleHits[p]=0; winHits[p]=0; fastLapHits[p]=0; });
+  scores.forEach(s=>{ 
+    if(totFlat[s.player_name]!==undefined){
+      totFlat[s.player_name]+=s.total_score;
+      qualiTots[s.player_name]+=s.quali_score;
+      raceTots[s.player_name]+=s.race_score;
+      fastLapTots[s.player_name]+=(s.fastest_lap_score||0);
+    }
+  });
   races.forEach(race=>{ PLAYERS.forEach(p=>{ const has=preds.find(pr=>pr.race_id===race.id&&pr.player_name===p&&(pr.quali_p1||pr.race_p1)); if(!has) missedCounts[p]++; }); });
-  results.forEach(res=>{ preds.filter(pr=>pr.race_id===res.race_id).forEach(pr=>{ if(norm(pr.quali_p1)===norm(res.quali_p1)) poleHits[pr.player_name]=(poleHits[pr.player_name]||0)+1; if(norm(pr.race_p1)===norm(res.race_p1)) winHits[pr.player_name]=(winHits[pr.player_name]||0)+1; }); });
+  results.forEach(res=>{ 
+    preds.filter(pr=>pr.race_id===res.race_id).forEach(pr=>{ 
+      if(norm(pr.quali_p1)===norm(res.quali_p1)) poleHits[pr.player_name]=(poleHits[pr.player_name]||0)+1; 
+      if(norm(pr.race_p1)===norm(res.race_p1)) winHits[pr.player_name]=(winHits[pr.player_name]||0)+1;
+      if(res.fastest_lap && pr.fastest_lap){ 
+        if(norm(pr.fastest_lap)===norm(res.fastest_lap)) fastLapHits[pr.player_name]=(fastLapHits[pr.player_name]||0)+1;
+      }
+    }); 
+  });
 
   const leader = Object.entries(totFlat).sort((a,b)=>b[1]-a[1])[0];
   const avgLeader = Object.entries(totFlat).map(([p,t]) => {
@@ -635,26 +646,29 @@ async function loadSeason() {
   }).sort((a,b)=>b[1]-a[1])[0];
   const mostPoles = Object.entries(poleHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
   const mostWins  = Object.entries(winHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
+  const mostFastLaps = Object.entries(fastLapHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
   const fewestMissed = Object.entries(missedCounts).sort((a,b)=>a[1]-b[1])[0];
   const hasScores = leader[1] > 0;
   const hasPoles  = mostPoles[1] > 0;
   const hasWins   = mostWins[1] > 0;
+  const hasFastLaps = mostFastLaps[1] > 0;
 
   document.getElementById('keyStats').innerHTML = `
     <div class="stat-card"><div class="stat-val">🏆</div><div class="stat-player">${hasScores?leader[0]:'—'}</div><div class="stat-name">Current Leader</div><div class="stat-val" style="font-size:1rem">${hasScores?leader[1]+' pts':'No data yet'}</div></div>
     <div class="stat-card"><div class="stat-val">${races.length} <span style="font-size:1rem;color:#666">/ 24</span></div><div class="stat-name">Rounds Scored</div></div>
     <div class="stat-card"><div class="stat-val">${hasPoles?mostPoles[1]:'—'}</div><div class="stat-player">${hasPoles?mostPoles[0]:''}</div><div class="stat-name">Most Pole Calls</div></div>
     <div class="stat-card"><div class="stat-val">${hasWins?mostWins[1]:'—'}</div><div class="stat-player">${hasWins?mostWins[0]:''}</div><div class="stat-name">Most Win Calls</div></div>
+    <div class="stat-card"><div class="stat-val">${hasFastLaps?mostFastLaps[1]:'—'}</div><div class="stat-player">${hasFastLaps?mostFastLaps[0]:''}</div><div class="stat-name">Most Fast Laps</div></div>
     <div class="stat-card"><div class="stat-val">${fewestMissed[1]}</div><div class="stat-player">${fewestMissed[0]}</div><div class="stat-name">Fewest Missed</div></div>
     <div class="stat-card"><div class="stat-val">${avgLeader[1]}</div><div class="stat-player">${avgLeader[0]}</div><div class="stat-name">Best Avg / Round</div></div>`;
 
-  const raceLabels=races.map(r=>r.name.replace(' Grand Prix','').replace(' GP',''));
+  const raceLabels=races.map(r=>`R${r.round}`);
   const datasets=PLAYERS.map((p,i)=>{ let run=0; return { label:p, data:races.map(race=>{ const s=scores.find(sc=>sc.race_id===race.id&&sc.player_name===p); run+=s?s.total_score:0; return run; }), borderColor:COLORS[i], backgroundColor:COLORS[i]+'33', tension:0.3, fill:false, pointRadius:3 }; });
   if(pointsChartInst) pointsChartInst.destroy();
   pointsChartInst=new Chart(document.getElementById('pointsChart'),{ type:'line', data:{labels:raceLabels,datasets}, options:{responsive:true,plugins:{legend:{labels:{color:'#ccc',font:{size:11}}}},scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#2a2a3a'}},y:{ticks:{color:'#888'},grid:{color:'#2a2a3a'}}}}});
 
   const sortedSplit=PLAYERS.slice().sort((a,b)=>totFlat[b]-totFlat[a]);
-  document.getElementById('splitTable').innerHTML=`<table class="data-table"><thead><tr><th>Player</th><th>Quali</th><th>Race</th><th>Race %</th></tr></thead><tbody>${sortedSplit.map(p=>{ const tot=qualiTots[p]+raceTots[p]; const pct=tot>0?Math.round((raceTots[p]/tot)*100):0; return `<tr style="color:#f0f0f0"><td><strong>${p}</strong></td><td>${qualiTots[p]}</td><td>${raceTots[p]}</td><td>${pct}%</td></tr>`; }).join('')}</tbody></table>`;
+  document.getElementById('splitTable').innerHTML=`<table class="data-table"><thead><tr><th>Player</th><th>Quali</th><th>Race</th><th>Fast Lap</th><th>Race %</th></tr></thead><tbody>${sortedSplit.map(p=>{ const tot=qualiTots[p]+raceTots[p]+fastLapTots[p]; const pct=tot>0?Math.round((raceTots[p]/tot)*100):0; return `<tr style="color:#f0f0f0"><td><strong>${p}</strong></td><td>${qualiTots[p]}</td><td>${raceTots[p]}</td><td>${fastLapTots[p]}</td><td>${pct}%</td></tr>`; }).join('')}</tbody></table>`;
   document.getElementById('missedTable').innerHTML=`<table class="data-table"><thead><tr><th>Player</th><th>Missed</th><th></th></tr></thead><tbody>${PLAYERS.slice().sort((a,b)=>missedCounts[a]-missedCounts[b]).map(p=>`<tr style="color:#f0f0f0"><td><strong>${p}</strong></td><td>${missedCounts[p]}</td><td>${missedCounts[p]===0?`<span class="badge green">Perfect</span>`:missedCounts[p]===1?`<span class="badge" style="background:#3a2a0a;color:#ffaa44;border:1px solid #5a4a0a">1 missed</span>`:`<span class="badge" style="background:#3a1a1a;color:#ff6b6b;border:1px solid #5a2a2a">${missedCounts[p]} missed</span>`}</td></tr>`).join('')}</tbody></table>`;
 
   const vol=(() =>{ let mx=0,k='—',found=false; PLAYERS.forEach(p=>{ const pts=races.map(r=>(scores.find(s=>s.race_id===r.id&&s.player_name===p)||{total_score:0}).total_score); const nz=pts.filter(x=>x>0); if(nz.length<2)return; const sw=Math.max(...pts)-Math.min(...nz); if(sw>mx){mx=sw;k=p;found=true;} }); return found?[k,mx]:['—','N/A']; })();
@@ -665,6 +679,7 @@ async function loadSeason() {
   document.getElementById('awardsGrid').innerHTML = hasScores ? [
     {icon:'🎯',title:'Most Pole Calls',player:hasPoles?mostPoles[0]:'—',detail:hasPoles?`${mostPoles[1]} correct poles`:'No data yet'},
     {icon:'🏁',title:'Most Win Calls',player:hasWins?mostWins[0]:'—',detail:hasWins?`${mostWins[1]} correct winners`:'No data yet'},
+    {icon:'⚡',title:'Hot Lap Hero',player:hasFastLaps?mostFastLaps[0]:'—',detail:hasFastLaps?`${mostFastLaps[1]} fastest laps called`:'No data yet'},
     {icon:'⏱️',title:'Mr Saturday',player:mrSat[0],detail:`${mrSat[1]} qualifying pts`},
     {icon:'🌞',title:'Sunday Merchant',player:mrSun[0],detail:`${mrSun[1]} race pts`},
     {icon:'🎢',title:'Volatility King',player:vol[0],detail:vol[1]==='N/A'?'Need 2+ rounds':`${vol[1]}pt swing`},
