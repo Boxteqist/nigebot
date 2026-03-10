@@ -134,6 +134,11 @@
           <div class="pos-row">P1 — <strong id="arr1" style="color:#ffd700">—</strong></div>
           <div class="pos-row">P2 — <strong id="arr2" style="color:#c0c0c0">—</strong></div>
           <div class="pos-row">P3 — <strong id="arr3" style="color:#cd7f32">—</strong></div>
+          <div id="as_sprintBlock">
+            <div class="pos-row">Sprint P1 — <strong id="asr1" style="color:#ffd700">—</strong></div>
+            <div class="pos-row">Sprint P2 — <strong id="asr2" style="color:#c0c0c0">—</strong></div>
+            <div class="pos-row">Sprint P3 — <strong id="asr3" style="color:#cd7f32">—</strong></div>
+          </div>
           <div class="pos-row">Fastest Lap — <strong id="arr_fl">—</strong></div>
         </div>
       </div>
@@ -156,6 +161,7 @@ const SB_KEY = 'sb_publishable_dkJN0bxvkkW7JHXAvZ62XQ_tpxexARU';
 const hdrs = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
 const QUALI_PTS = [12.5, 9, 7.5];
 const RACE_PTS  = [25, 18, 15];
+const SPRINT_PTS = [12.5, 9, 7.5]; // sprint race is half main race points
 const FASTEST_LAP_PTS = 10;
 const PLAYERS   = ['Ollie','Tom','Tim','Ralph','Herbie','Dave','Jason'];
 
@@ -272,19 +278,23 @@ async function fetchPreview() {
   msg.className = 'status-msg info'; msg.textContent = '⏳ Fetching from Jolpica...'; msg.classList.remove('hidden');
 
   try {
-    const [qRes, rRes] = await Promise.all([
+    const [qRes, rRes, sRes] = await Promise.all([
       fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`),
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`)
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`),
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/sprint/`)
     ]);
-    const qData = await qRes.json(), rData = await rRes.json();
+    const qData = await qRes.json(), rData = await rRes.json(), sData = await sRes.json();
     const qRace = qData.MRData.RaceTable.Races[0];
     const rRace = rData.MRData.RaceTable.Races[0];
+    const sRace = sData.MRData.RaceTable.Races[0];
 
-    if (!qRace && !rRace) { msg.className='status-msg error'; msg.textContent='⚠️ No results available yet from Jolpica.'; return; }
+    if (!qRace && !rRace && !sRace) { msg.className='status-msg error'; msg.textContent='⚠️ No results available yet from Jolpica.'; return; }
 
     const qTop3 = qRace ? qRace.QualifyingResults.slice(0,3).map(d => d.Driver.familyName) : null;
     const rTop3 = rRace ? rRace.Results.slice(0,3).map(d => d.Driver.familyName) : null;
+    const sTop3 = sRace ? sRace.SprintResults.slice(0,3).map(d => d.Driver.familyName) : null;
     const hasQual = !!qTop3, hasRace = !!rTop3;
+    const hasSprint = !!sTop3;
 
     let fastestLapDriver = null;
     if (hasRace) {
@@ -309,6 +319,15 @@ async function fetchPreview() {
       ['rr1','rr2','rr3'].forEach(id => { const el=document.getElementById('a'+id); el.textContent='Pending'; el.style.color='#ffaa44'; });
     }
 
+    const sprintBlock = document.getElementById('as_sprintBlock');
+    if (hasSprint) {
+      ['sr1','sr2','sr3'].forEach((id,i) => { document.getElementById('a'+id).textContent=sTop3[i]; });
+      if (sprintBlock) sprintBlock.classList.remove('hidden');
+    } else {
+      ['sr1','sr2','sr3'].forEach(id => { document.getElementById('a'+id).textContent='—'; });
+      if (sprintBlock) sprintBlock.classList.add('hidden');
+    }
+
     // Show fastest lap under Race column; Round 1 shows a hyphen because we don't count it
     const flLabel = parseInt(round,10) === 1 ? '—' : (fastestLapDriver || '—');
     document.getElementById('arr_fl').textContent = flLabel;
@@ -324,17 +343,19 @@ async function fetchPreview() {
       const p = preds.find(x => x.player_name === player);
       const qPreds = p ? [p.quali_p1,p.quali_p2,p.quali_p3] : [null,null,null];
       const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
+      const sPreds = p ? [p.sprint_p1,p.sprint_p2,p.sprint_p3] : [null,null,null];
       const qScore = hasQual ? calcScore(qPreds, qTop3, QUALI_PTS) : null;
       const rScore = hasRace ? calcScore(rPreds, rTop3, RACE_PTS)  : null;
+      const sScore = hasSprint ? calcScore(sPreds, sTop3, SPRINT_PTS) : null;
       const flPred = p ? p.fastest_lap : null;
       const flScore = (parseInt(round,10) > 1 && hasRace && fastestLapDriver && flPred && norm(flPred) === norm(fastestLapDriver))
         ? FASTEST_LAP_PTS
         : 0;
-      const total  = (qScore||0) + (rScore||0) + flScore;
-      return { player, p, qPreds, rPreds, qScore, rScore, flPred, flScore, total };
+      const total  = (qScore||0) + (rScore||0) + (sScore||0) + flScore;
+      return { player, p, qPreds, rPreds, sPreds, qScore, rScore, sScore, flPred, flScore, total };
     }).sort((a,b) => b.total - a.total);
 
-    grid.innerHTML = playerScores.map(({ player, qPreds, rPreds, qScore, rScore, flPred, flScore, total }) => {
+    grid.innerHTML = playerScores.map(({ player, qPreds, rPreds, sPreds, qScore, rScore, sScore, flPred, flScore, total }) => {
 
       const predLine = (pred, actual, label) => {
         if (!actual) return `<div class="pred-line miss"><span class="pos-label">${label}</span><span class="driver" style="color:#ffaa44">${pred||'—'} ⏳</span></div>`;
@@ -352,6 +373,8 @@ async function fetchPreview() {
         <h3>${player} <span>${total}${!hasRace?' ⏳':''} pts</span></h3>
         <div class="section-title" style="font-size:0.68rem">Qualifying (${qScore!==null?qScore:'—'})</div>
         ${predLine(qPreds[0],qTop3,'P1')}${predLine(qPreds[1],qTop3,'P2')}${predLine(qPreds[2],qTop3,'P3')}
+        <div class="section-title" style="font-size:0.68rem;margin-top:8px">Sprint (${sScore!==null?sScore:'—'})</div>
+        ${predLine(sPreds[0],sTop3,'P1')}${predLine(sPreds[1],sTop3,'P2')}${predLine(sPreds[2],sTop3,'P3')}
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Race (${rScore!==null?rScore:'pending'})</div>
         ${predLine(rPreds[0],rTop3,'P1')}${predLine(rPreds[1],rTop3,'P2')}${predLine(rPreds[2],rTop3,'P3')}
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Fastest Lap (${parseInt(round,10)>1 ? (fastestLapDriver ? (flScore ? flScore+' pts' : '0 pts') : 'unavailable') : 'not used'})</div>
@@ -403,6 +426,9 @@ async function publishResults() {
       race_id:rid,
       quali_p1:qTop3[0], quali_p2:qTop3[1], quali_p3:qTop3[2],
       race_p1:rTop3[0],  race_p2:rTop3[1],  race_p3:rTop3[2],
+      sprint_p1:sTop3 ? sTop3[0] : null,
+      sprint_p2:sTop3 ? sTop3[1] : null,
+      sprint_p3:sTop3 ? sTop3[2] : null,
       fastest_lap: parseInt(round,10) > 1 ? fastestLapDriver : null,
       fetched_at:new Date().toISOString()
     });
@@ -410,8 +436,10 @@ async function publishResults() {
       const p = preds.find(x => x.player_name === player);
       const qPreds = p ? [p.quali_p1,p.quali_p2,p.quali_p3] : [null,null,null];
       const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
+      const sPreds = p ? [p.sprint_p1,p.sprint_p2,p.sprint_p3] : [null,null,null];
       const qs = calcScore(qPreds, qTop3, QUALI_PTS);
       const rs = calcScore(rPreds, rTop3, RACE_PTS);
+      const ss = hasSprint ? calcScore(sPreds, sTop3, SPRINT_PTS) : 0;
       const flPred = p ? p.fastest_lap : null;
       const flScore = (parseInt(round,10) > 1 && fastestLapDriver && flPred && norm(flPred) === norm(fastestLapDriver))
         ? FASTEST_LAP_PTS
@@ -421,8 +449,9 @@ async function publishResults() {
         race_id:rid,
         quali_score:qs,
         race_score:rs,
+        sprint_score:ss,
         fastest_lap_score: flScore,
-        total_score:qs+rs+flScore,
+        total_score:qs+rs+ss+flScore,
         calculated_at:new Date().toISOString()
       };
     });

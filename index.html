@@ -19,7 +19,7 @@
     background-size: 8px 8px;
   }
   header { background: #DC0000; padding: 16px 24px; display: flex; align-items: center; gap: 14px; }
-  .flag { font-size: 1.6rem; }
+  .flag { font-size: 3.2rem; }
   header h1 { font-size: 1.5rem; font-weight: 800; color: #fff; }
   header span { font-size: 0.8rem; color: rgba(255,255,255,0.75); }
   .container { max-width: 980px; margin: 0 auto; padding: 20px 16px; }
@@ -31,6 +31,8 @@
   select option { background: #1a1a24; }
   .btn { background: #DC0000; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: background 0.2s; }
   .btn:hover { background: #b00000; }
+  .btn.green { background: #1a7f37; }
+  .btn.green:hover { background: #16632b; }
   .btn:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
   .btn.full { width: 100%; padding: 13px; font-size: 1rem; border-radius: 10px; }
   .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -107,23 +109,20 @@
   <div id="appVersion" style="font-size:0.75rem;color:rgba(255,255,255,0.6);align-self:flex-end;padding-bottom:2px;"></div>
 </header>
 
-<div class="container">
+  <div class="container">
 
   <div id="predLockBanner" class="lock-banner hidden">
     🔒 <strong>Predictions are locked.</strong> Qualifying has started — no more changes can be made for this race.
   </div>
-  <div id="predOpenBanner" style="background:#2a1a0a;border:1px solid #5a3a1a;border-radius:8px;padding:10px 14px;font-size:0.82rem;color:#ffaa44;margin-bottom:16px;">
-    🔒 <strong>Predictions lock automatically when qualifying starts.</strong> Get your picks in before then — after that, no changes can be made!
-  </div>
-  <div id="lastPublishedBanner" style="background:#1a1a2a;border:1px solid #2a2a3a;border-radius:8px;padding:8px 14px;font-size:0.8rem;color:#888;margin-bottom:12px;">
-    ⏱️ Last results published: <span id="lastPublishedText" style="color:#4a9eff;">loading...</span>
+  <div id="predOpenBanner" style="background:#2a1a0a;border:1px solid #5a3a1a;border-radius:8px;padding:8px 14px;font-size:0.9rem;color:#ffd27f;margin-bottom:16px;font-weight:600;">
+    <div id="lockCountdown"></div>
   </div>
 
   <div class="tabs">
     <button class="tab active" onclick="showTab('enter',this)">📋 Predictions</button>
     <button class="tab" onclick="showTab('results',this)">🏆 Results</button>
     <button class="tab" onclick="showTab('season',this)">📊 Season</button>
-    <button class="tab" onclick="showTab('scoring',this)">📖 Scoring</button>
+    <button class="tab" onclick="showTab('scoring',this)">📖 Regulations</button>
   </div>
 
   <div class="card" id="raceSelectorCard">
@@ -150,7 +149,7 @@
     <div class="card hidden" id="predictionsCard">
       <h2>Predictions</h2>
       <div class="pred-grid" id="predGrid"></div>
-      <button class="btn full" id="saveBtn" style="margin-top:16px" onclick="savePredictions()">💾 Save All Predictions</button>
+      <button class="btn full" id="saveBtn" style="margin-top:16px" onclick="savePredictions()">💾 Save your predictions</button>
       <div id="saveStatus" class="status-msg hidden"></div>
     </div>
     <div id="noRaceMsg" style="text-align:center;color:#888;font-size:0.9rem;padding:40px 0;">
@@ -162,6 +161,9 @@
   <div id="resultsTab" class="hidden">
     <div class="card">
       <h2>Race Results</h2>
+      <div id="lastPublishedBanner" style="background:#1a1a2a;border:1px solid #2a2a3a;border-radius:8px;padding:8px 14px;font-size:0.8rem;color:#888;margin-bottom:12px;">
+        ⏱️ Last results published: <span id="lastPublishedText" style="color:#4a9eff;">loading...</span>
+      </div>
       <div style="margin-bottom:16px">
         <label class="label">Round</label>
         <select id="resultsRaceSel" onchange="loadResultsForRace()" style="max-width:400px"></select>
@@ -179,6 +181,11 @@
             <div class="pos-row">P1 — <strong id="res_rr1" style="color:#ffd700">—</strong></div>
             <div class="pos-row">P2 — <strong id="res_rr2" style="color:#c0c0c0">—</strong></div>
             <div class="pos-row">P3 — <strong id="res_rr3" style="color:#cd7f32">—</strong></div>
+            <div id="res_sprintBlock">
+              <div class="pos-row">Sprint P1 — <strong id="res_sr1" style="color:#ffd700">—</strong></div>
+              <div class="pos-row">Sprint P2 — <strong id="res_sr2" style="color:#c0c0c0">—</strong></div>
+              <div class="pos-row">Sprint P3 — <strong id="res_sr3" style="color:#cd7f32">—</strong></div>
+            </div>
             <div class="pos-row">Fastest Lap — <strong id="res_fl">—</strong></div>
           </div>
         </div>
@@ -204,7 +211,7 @@
     </div>
     <div class="two-col">
       <div class="card">
-        <h2>Quali vs Race Split</h2>
+        <h2>Crofty's Split — Points Breakdown</h2>
         <div id="splitTable"></div>
       </div>
       <div class="card">
@@ -221,9 +228,49 @@
   <!-- SCORING TAB -->
   <div id="scoringTab" class="hidden">
     <div class="card">
-      <h2>How Scoring Works</h2>
-      <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">Each race weekend you predict the top 3 in qualifying and the top 3 in the race. From Round 2 onwards you also predict the fastest lap in the race. Points are awarded as follows:</p>
+      <h2>NigeBot’s Regulations</h2>
+      <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">Each race weekend you predict the top 3 in qualifying and the top 3 in the Grand Prix. On Sprint weekends you also predict the top 3 in the Sprint Race. You also predict the fastest lap in the Grand Prix. Points are awarded as follows:</p>
+      <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">Predictions lock automatically when qualifying starts. Get your picks in before then — after that, no changes can be made.</p>
       <div class="two-col" style="margin-bottom:20px;">
+        <div>
+          <div class="section-title">Race & Sprint Race</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <thead>
+              <tr>
+                <th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">Position</th>
+                <th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">Grand Prix (exact)</th>
+                <th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">Sprint Race (exact)</th>
+                <th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">One off</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding:8px;color:#ffd700">🥇 P1</td>
+                <td style="padding:8px">25 pts</td>
+                <td style="padding:8px">12.5 pts</td>
+                <td style="padding:8px;color:#888">half points</td>
+              </tr>
+              <tr>
+                <td style="padding:8px;color:#c0c0c0">🥈 P2</td>
+                <td style="padding:8px">18 pts</td>
+                <td style="padding:8px">9 pts</td>
+                <td style="padding:8px;color:#888">half points</td>
+              </tr>
+              <tr>
+                <td style="padding:8px;color:#cd7f32">🥉 P3</td>
+                <td style="padding:8px">15 pts</td>
+                <td style="padding:8px">7.5 pts</td>
+                <td style="padding:8px;color:#888">half points</td>
+              </tr>
+              <tr>
+                <td style="padding:8px;">⚡ Fastest Lap</td>
+                <td style="padding:8px">10 pts</td>
+                <td style="padding:8px">—</td>
+                <td style="padding:8px;color:#888">0 pts</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <div>
           <div class="section-title">Qualifying</div>
           <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
@@ -235,24 +282,13 @@
             </tbody>
           </table>
         </div>
-        <div>
-          <div class="section-title">Race</div>
-          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
-            <thead><tr><th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">Position</th><th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">Exact</th><th style="text-align:left;color:#888;padding:6px 8px;border-bottom:1px solid #2a2a3a">One off</th></tr></thead>
-            <tbody>
-              <tr><td style="padding:8px;color:#ffd700">🥇 P1</td><td style="padding:8px">25 pts</td><td style="padding:8px;color:#888">12.5 pts</td></tr>
-              <tr><td style="padding:8px;color:#c0c0c0">🥈 P2</td><td style="padding:8px">18 pts</td><td style="padding:8px;color:#888">9 pts</td></tr>
-              <tr><td style="padding:8px;color:#cd7f32">🥉 P3</td><td style="padding:8px">15 pts</td><td style="padding:8px;color:#888">7.5 pts</td></tr>
-              <tr><td style="padding:8px;">⚡ Fastest Lap (R2+)</td><td style="padding:8px">10 pts</td><td style="padding:8px;color:#888">0 pts</td></tr>
-            </tbody>
-          </table>
-        </div>
       </div>
       <div style="background:#0f0f13;border-radius:10px;padding:14px;font-size:0.85rem;line-height:1.8;border:1px solid #2a2a3a;">
-        <p style="margin-bottom:8px">✅ <strong>Exact match</strong> — you predicted a driver in the correct position, you get the full points for that position.</p>
-        <p style="margin-bottom:8px">🔁 <strong>One position off</strong> — you predicted a driver one place out (e.g. predicted P1, they finished P2), you get <strong>half</strong> the points for where they actually finished.</p>
-        <p style="margin-bottom:8px">❌ <strong>Two or more positions off</strong> — no points. If a driver doesn't finish in the top 3 at all, no points either.</p>
-        <p>⚡ <strong>Fastest lap (from Round 2)</strong> — 10 points if you name the fastest-lap driver correctly, otherwise 0. Australia (Round 1) does not use fastest lap.</p>
+        <p style="margin-bottom:8px">✅ <strong>Exact match</strong> — if you predict a driver in the correct finishing position, you get the <strong>full points</strong> for that position.</p>
+        <p style="margin-bottom:8px">🔁 <strong>One position off</strong> — if you predict a driver one place out (e.g. predict P1 and they finish P2), you get <strong>half of the points for where they actually finished</strong>.</p>
+        <p style="margin-bottom:8px">❌ <strong>Two or more positions off</strong> — no points. If a driver doesn't finish in the top 3 at all, you get zero for that driver.</p>
+        <p style="margin-bottom:8px">⚡ <strong>Fastest lap</strong> — 10 points if you correctly name the fastest-lap driver in the Grand Prix. There are no half-points for fastest lap; it's all-or-nothing.</p>
+        <p>🏁 <strong>Sprint Race</strong> — scored exactly like the main race but at <strong>half points</strong> (P1 12.5, P2 9, P3 7.5) using the same exact and one-position-off rules above.</p>
       </div>
       <div style="background:#1a1a2a;border-radius:10px;padding:14px;font-size:0.85rem;margin-top:12px;border:1px solid #2a2a3a;color:#aaa;">
         💡 <strong>Example:</strong> You predict Hamilton for P1 in the race. He finishes P2. You get half of the P2 points — <strong>9 points</strong>.
@@ -267,6 +303,7 @@ const SB_URL  = 'https://qkmukcuqosvlumsrqyay.supabase.co';
 const SB_KEY  = 'sb_publishable_dkJN0bxvkkW7JHXAvZ62XQ_tpxexARU';
 const QUALI_PTS = [12.5, 9, 7.5];
 const RACE_PTS  = [25, 18, 15];
+const SPRINT_PTS = [12.5, 9, 7.5]; // sprint race is half main race points
 const PLAYERS   = ['Ollie','Tom','Tim','Ralph','Herbie','Dave','Jason'];
 const COLORS    = ['#e10600','#4a9eff','#4caf50','#ffd700','#ff9800','#c084fc','#f472b6'];
 const hdrs = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
@@ -282,23 +319,25 @@ const DRIVER_CODES = {
 
 const CALENDAR_2026 = [
   {round:'1',raceName:'Australian Grand Prix',date:'2026-03-15',time:'05:00:00Z',Qualifying:{date:'2026-03-14',time:'05:00:00Z'}},
-  {round:'2',raceName:'Chinese Grand Prix',date:'2026-03-22',time:'07:00:00Z',Qualifying:{date:'2026-03-21',time:'07:00:00Z'}},
+  // Chinese GP weekend is March 13–15 local (UTC+8)
+  // Sprint Sat 11:00 local => 03:00Z, Quali Sat 15:00 local => 07:00Z, Race Sun 15:00 local => 07:00Z
+  {round:'2',raceName:'Chinese Grand Prix',date:'2026-03-15',time:'07:00:00Z',Qualifying:{date:'2026-03-14',time:'07:00:00Z'},Sprint:{date:'2026-03-14',time:'03:00:00Z'}},
   {round:'3',raceName:'Japanese Grand Prix',date:'2026-04-05',time:'05:00:00Z',Qualifying:{date:'2026-04-04',time:'05:00:00Z'}},
   {round:'4',raceName:'Bahrain Grand Prix',date:'2026-04-19',time:'15:00:00Z',Qualifying:{date:'2026-04-18',time:'15:00:00Z'}},
   {round:'5',raceName:'Saudi Arabian Grand Prix',date:'2026-04-26',time:'17:00:00Z',Qualifying:{date:'2026-04-25',time:'17:00:00Z'}},
-  {round:'6',raceName:'Miami Grand Prix',date:'2026-05-10',time:'19:00:00Z',Qualifying:{date:'2026-05-09',time:'19:00:00Z'}},
+  {round:'6',raceName:'Miami Grand Prix',date:'2026-05-10',time:'19:00:00Z',Qualifying:{date:'2026-05-09',time:'19:00:00Z'},Sprint:{date:'2026-05-09',time:'23:00:00Z'}},
   {round:'7',raceName:'Emilia Romagna Grand Prix',date:'2026-05-24',time:'13:00:00Z',Qualifying:{date:'2026-05-23',time:'13:00:00Z'}},
   {round:'8',raceName:'Monaco Grand Prix',date:'2026-05-28',time:'13:00:00Z',Qualifying:{date:'2026-05-23',time:'13:00:00Z'}},
   {round:'9',raceName:'Spanish Grand Prix',date:'2026-06-07',time:'13:00:00Z',Qualifying:{date:'2026-06-06',time:'13:00:00Z'}},
-  {round:'10',raceName:'Canadian Grand Prix',date:'2026-06-14',time:'18:00:00Z',Qualifying:{date:'2026-06-13',time:'18:00:00Z'}},
+  {round:'10',raceName:'Canadian Grand Prix',date:'2026-06-14',time:'18:00:00Z',Qualifying:{date:'2026-06-13',time:'18:00:00Z'},Sprint:{date:'2026-06-13',time:'22:00:00Z'}},
   {round:'11',raceName:'Austrian Grand Prix',date:'2026-06-28',time:'13:00:00Z',Qualifying:{date:'2026-06-27',time:'13:00:00Z'}},
-  {round:'12',raceName:'British Grand Prix',date:'2026-07-05',time:'14:00:00Z',Qualifying:{date:'2026-07-04',time:'14:00:00Z'}},
+  {round:'12',raceName:'British Grand Prix',date:'2026-07-05',time:'14:00:00Z',Qualifying:{date:'2026-07-04',time:'14:00:00Z'},Sprint:{date:'2026-07-04',time:'18:00:00Z'}},
   {round:'13',raceName:'Belgian Grand Prix',date:'2026-07-26',time:'13:00:00Z',Qualifying:{date:'2026-07-25',time:'13:00:00Z'}},
   {round:'14',raceName:'Hungarian Grand Prix',date:'2026-08-02',time:'13:00:00Z',Qualifying:{date:'2026-08-01',time:'13:00:00Z'}},
-  {round:'15',raceName:'Dutch Grand Prix',date:'2026-08-30',time:'13:00:00Z',Qualifying:{date:'2026-08-29',time:'13:00:00Z'}},
+  {round:'15',raceName:'Dutch Grand Prix',date:'2026-08-30',time:'13:00:00Z',Qualifying:{date:'2026-08-29',time:'13:00:00Z'},Sprint:{date:'2026-08-29',time:'17:00:00Z'}},
   {round:'16',raceName:'Italian Grand Prix',date:'2026-09-06',time:'13:00:00Z',Qualifying:{date:'2026-09-05',time:'13:00:00Z'}},
   {round:'17',raceName:'Azerbaijan Grand Prix',date:'2026-09-20',time:'11:00:00Z',Qualifying:{date:'2026-09-19',time:'11:00:00Z'}},
-  {round:'18',raceName:'Singapore Grand Prix',date:'2026-10-04',time:'12:00:00Z',Qualifying:{date:'2026-10-03',time:'12:00:00Z'}},
+  {round:'18',raceName:'Singapore Grand Prix',date:'2026-10-04',time:'12:00:00Z',Qualifying:{date:'2026-10-03',time:'12:00:00Z'},Sprint:{date:'2026-10-03',time:'16:00:00Z'}},
   {round:'19',raceName:'United States Grand Prix',date:'2026-10-18',time:'19:00:00Z',Qualifying:{date:'2026-10-17',time:'19:00:00Z'}},
   {round:'20',raceName:'Mexico City Grand Prix',date:'2026-10-25',time:'20:00:00Z',Qualifying:{date:'2026-10-24',time:'20:00:00Z'}},
   {round:'21',raceName:'São Paulo Grand Prix',date:'2026-11-08',time:'17:00:00Z',Qualifying:{date:'2026-11-07',time:'17:00:00Z'}},
@@ -318,9 +357,11 @@ if (appVersionEl) {
 let currentRaceId = null;
 let currentQualiAt = null;
 let currentRound = null;
+let currentIsSprintWeekend = false;
 let allRaces = [];
 let pointsChartInst = null;
 let isDirty = false;
+let lockTimerId = null;
 
 async function sbGet(path) {
   const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: hdrs });
@@ -345,13 +386,81 @@ function isLocked() {
 
 function applyLockState() {
   const locked = isLocked();
+  const saveBtn = document.getElementById('saveBtn');
   document.getElementById('predLockBanner').classList.toggle('hidden', !locked);
   document.getElementById('predOpenBanner').classList.toggle('hidden', locked);
-  document.getElementById('saveBtn').disabled = locked;
+  if (saveBtn) {
+    saveBtn.disabled = locked;
+    if (locked) {
+      saveBtn.textContent = "🔒 We're locked and loaded.";
+      saveBtn.classList.add('green');
+    } else {
+      saveBtn.textContent = '💾 Save your predictions';
+      saveBtn.classList.remove('green');
+    }
+  }
   document.querySelectorAll('#predGrid input').forEach(el => {
     el.disabled = locked;
     if (locked) el.style.borderColor = '';
   });
+}
+
+function startLockCountdown() {
+  const el = document.getElementById('lockCountdown');
+  if (!el) return;
+
+  // Clear existing timer if any
+  if (lockTimerId) {
+    clearInterval(lockTimerId);
+    lockTimerId = null;
+  }
+
+  // If we don't have a quali time yet, clear text and bail
+  if (!currentQualiAt) {
+    el.textContent = '';
+    return;
+  }
+
+  function update() {
+    if (isLocked()) {
+      el.textContent = 'Predictions are locked.';
+      if (lockTimerId) {
+        clearInterval(lockTimerId);
+        lockTimerId = null;
+      }
+      return;
+    }
+
+    const now = Date.now();
+    const lockTime = new Date(currentQualiAt).getTime();
+    const diffMs = lockTime - now;
+    if (diffMs <= 0) {
+      el.textContent = 'Predictions are locked.';
+      if (lockTimerId) {
+        clearInterval(lockTimerId);
+        lockTimerId = null;
+      }
+      applyLockState();
+      return;
+    }
+
+    const totalSec = Math.floor(diffMs / 1000);
+    const days = Math.floor(totalSec / 86400);
+    const hours = Math.floor((totalSec % 86400) / 3600);
+    const minutes = Math.floor((totalSec % 3600) / 60);
+    const seconds = totalSec % 60;
+
+    const parts = [];
+    if (days) parts.push(`${days}d`);
+    if (hours || days) parts.push(`${hours}h`);
+    if (minutes || hours || days) parts.push(`${minutes}m`);
+    parts.push(`${seconds}s`);
+
+    el.textContent = `⏱️ Prediction lock countdown: ${parts.join(' ')}`;
+  }
+
+  update();
+  lockTimerId = setInterval(update, 1000);
 }
 
 function showTab(tab, btn) {
@@ -395,6 +504,7 @@ async function onRaceChange() {
   const season = document.getElementById('seasonSel').value;
   const race = allRaces.find(r => r.round == round);
   if (!race) return;
+  currentIsSprintWeekend = !!race.Sprint;
   currentRound = parseInt(round,10);
   raceStatus.className = 'status-msg info';
   raceStatus.textContent = '⏳ Loading race...';
@@ -421,6 +531,7 @@ async function onRaceChange() {
     document.getElementById('noRaceMsg').classList.add('hidden');
     renderPredGrid();
     applyLockState();
+    startLockCountdown();
     await loadExistingPredictions();
     isDirty = false;
     document.querySelectorAll('#predGrid input').forEach(el => el.addEventListener('input', () => isDirty = true));
@@ -444,6 +555,10 @@ function renderPredGrid() {
       <h3>${p}</h3>
       <div class="section-title">Qualifying</div>
       ${inp(`${p}_q1`,'P1')}${inp(`${p}_q2`,'P2')}${inp(`${p}_q3`,'P3')}
+      ${currentIsSprintWeekend ? `
+      <div class="section-title" style="margin-top:4px">Sprint Race</div>
+      ${inp(`${p}_s1`,'P1')}${inp(`${p}_s2`,'P2')}${inp(`${p}_s3`,'P3')}
+      ` : ''}
       <div class="section-title" style="margin-top:4px">Race</div>
       ${inp(`${p}_r1`,'P1')}${inp(`${p}_r2`,'P2')}${inp(`${p}_r3`,'P3')}
       <div class="section-title" style="margin-top:4px">Fastest Lap</div>
@@ -468,6 +583,7 @@ async function loadExistingPredictions() {
   const preds = await sbGet(`predictions?race_id=eq.${currentRaceId}`);
   preds.forEach(p => {
     setVal(`${p.player_name}_q1`,p.quali_p1); setVal(`${p.player_name}_q2`,p.quali_p2); setVal(`${p.player_name}_q3`,p.quali_p3);
+    setVal(`${p.player_name}_s1`,p.sprint_p1); setVal(`${p.player_name}_s2`,p.sprint_p2); setVal(`${p.player_name}_s3`,p.sprint_p3);
     setVal(`${p.player_name}_r1`,p.race_p1);  setVal(`${p.player_name}_r2`,p.race_p2);  setVal(`${p.player_name}_r3`,p.race_p3);
     setVal(`${p.player_name}_fl`,p.fastest_lap);
   });
@@ -486,6 +602,12 @@ async function savePredictions() {
       const val = getVal(`${p}_${f}`);
       if (val && !DRIVER_CODES[val.toUpperCase()]) invalid.push(`${p}: ${val}`);
     });
+    if (currentIsSprintWeekend) {
+      ['s1','s2','s3'].forEach(f => {
+        const val = getVal(`${p}_${f}`);
+        if (val && !DRIVER_CODES[val.toUpperCase()]) invalid.push(`${p}: ${val} (sprint)`);
+      });
+    }
     if (currentRound && currentRound > 1) {
       const fl = getVal(`${p}_fl`);
       if (fl && !DRIVER_CODES[fl.toUpperCase()]) invalid.push(`${p}: ${fl} (fastest lap)`);
@@ -495,6 +617,9 @@ async function savePredictions() {
   const rows = PLAYERS.map(p => ({
     race_id: currentRaceId, player_name: p,
     quali_p1:getVal(`${p}_q1`).toUpperCase(),quali_p2:getVal(`${p}_q2`).toUpperCase(),quali_p3:getVal(`${p}_q3`).toUpperCase(),
+    sprint_p1: currentIsSprintWeekend ? getVal(`${p}_s1`).toUpperCase() : null,
+    sprint_p2: currentIsSprintWeekend ? getVal(`${p}_s2`).toUpperCase() : null,
+    sprint_p3: currentIsSprintWeekend ? getVal(`${p}_s3`).toUpperCase() : null,
     race_p1:getVal(`${p}_r1`).toUpperCase(),race_p2:getVal(`${p}_r2`).toUpperCase(),race_p3:getVal(`${p}_r3`).toUpperCase(),
     fastest_lap: currentRound && currentRound > 1 ? getVal(`${p}_fl`).toUpperCase() : null,
     submitted_at: new Date().toISOString()
@@ -550,6 +675,9 @@ async function loadResultsForRace() {
     document.getElementById('res_rr1').textContent = r.race_p1 || '—';
     document.getElementById('res_rr2').textContent = r.race_p2 || '—';
     document.getElementById('res_rr3').textContent = r.race_p3 || '—';
+    document.getElementById('res_sr1').textContent = r.sprint_p1 || '—';
+    document.getElementById('res_sr2').textContent = r.sprint_p2 || '—';
+    document.getElementById('res_sr3').textContent = r.sprint_p3 || '—';
     document.getElementById('res_fl').textContent = r.fastest_lap || '—';
     document.getElementById('resultsActual').classList.remove('hidden');
 
@@ -557,6 +685,14 @@ async function loadResultsForRace() {
     const rTop3 = [r.race_p1, r.race_p2, r.race_p3];
     const hasRace = !!r.race_p1;
     const fastLapDriver = r.fastest_lap || null;
+    const sTop3 = [r.sprint_p1, r.sprint_p2, r.sprint_p3];
+    const hasSprint = !!r.sprint_p1;
+
+    // Hide sprint rows entirely if this was not a sprint weekend
+    const sprintBlock = document.getElementById('res_sprintBlock');
+    if (sprintBlock) {
+      sprintBlock.classList.toggle('hidden', !hasSprint);
+    }
 
     const predLine = (pred, actual, label) => {
       if (!pred) return `<div class="pred-line miss"><span class="pos-label">${label}</span><span class="driver">—</span></div>`;
@@ -580,6 +716,10 @@ async function loadResultsForRace() {
         <h3>${s.player_name} <span>${s.total_score} pts</span></h3>
         <div class="section-title" style="font-size:0.68rem">Qualifying (${s.quali_score})</div>
         ${predLine(qPreds[0],qTop3,'P1')}${predLine(qPreds[1],qTop3,'P2')}${predLine(qPreds[2],qTop3,'P3')}
+        ${hasSprint ? `
+        <div class="section-title" style="font-size:0.68rem;margin-top:8px">Sprint (${s.sprint_score || 0})</div>
+        ${predLine(p?.sprint_p1 || null,sTop3,'P1')}${predLine(p?.sprint_p2 || null,sTop3,'P2')}${predLine(p?.sprint_p3 || null,sTop3,'P3')}
+        ` : ''}
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Race (${s.race_score})</div>
         ${predLine(rPreds[0],rTop3,'P1')}${predLine(rPreds[1],rTop3,'P2')}${predLine(rPreds[2],rTop3,'P3')}
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Fastest Lap</div>
@@ -611,8 +751,14 @@ async function loadSeason() {
 
   // Leaderboard
   const totals = {};
-  PLAYERS.forEach(p => totals[p] = {q:0,r:0,t:0});
-  scores.forEach(s => { if(totals[s.player_name]) { totals[s.player_name].q+=s.quali_score; totals[s.player_name].r+=s.race_score; totals[s.player_name].t+=s.total_score; }});
+  PLAYERS.forEach(p => totals[p] = {q:0,r:0,s:0,t:0});
+  scores.forEach(s => {
+    if(totals[s.player_name]) {
+      totals[s.player_name].q+=s.quali_score;
+      totals[s.player_name].r+=s.race_score;
+      totals[s.player_name].s+=(s.sprint_score||0);
+      totals[s.player_name].t+=s.total_score;
+    }});
   const sorted = Object.entries(totals).sort((a,b)=>b[1].t-a[1].t);
   const medals = ['🥇','🥈','🥉'];
   document.getElementById('leaderboard').innerHTML = `
@@ -627,13 +773,14 @@ async function loadSeason() {
   const preds  = await sbGet(`predictions?race_id=in.(${ids})`);
   const results = await sbGet(`results?race_id=in.(${ids})`);
 
-  const totFlat={}, qualiTots={}, raceTots={}, fastLapTots={}, missedCounts={}, poleHits={}, winHits={}, fastLapHits={};
-  PLAYERS.forEach(p=>{ totFlat[p]=0; qualiTots[p]=0; raceTots[p]=0; fastLapTots[p]=0; missedCounts[p]=0; poleHits[p]=0; winHits[p]=0; fastLapHits[p]=0; });
+  const totFlat={}, qualiTots={}, raceTots={}, sprintTots={}, fastLapTots={}, missedCounts={}, poleHits={}, winHits={}, fastLapHits={};
+  PLAYERS.forEach(p=>{ totFlat[p]=0; qualiTots[p]=0; raceTots[p]=0; sprintTots[p]=0; fastLapTots[p]=0; missedCounts[p]=0; poleHits[p]=0; winHits[p]=0; fastLapHits[p]=0; });
   scores.forEach(s=>{ 
     if(totFlat[s.player_name]!==undefined){
       totFlat[s.player_name]+=s.total_score;
       qualiTots[s.player_name]+=s.quali_score;
       raceTots[s.player_name]+=s.race_score;
+      sprintTots[s.player_name]+=(s.sprint_score||0);
       fastLapTots[s.player_name]+=(s.fastest_lap_score||0);
     }
   });
@@ -656,17 +803,20 @@ async function loadSeason() {
   const mostPoles = Object.entries(poleHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
   const mostWins  = Object.entries(winHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
   const mostFastLaps = Object.entries(fastLapHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
+  const sprintSpecialist = Object.entries(sprintTots).sort((a,b)=>b[1]-a[1])[0]||['—',0];
   const fewestMissed = Object.entries(missedCounts).sort((a,b)=>a[1]-b[1])[0];
   const hasScores = leader[1] > 0;
   const hasPoles  = mostPoles[1] > 0;
   const hasWins   = mostWins[1] > 0;
   const hasFastLaps = mostFastLaps[1] > 0;
+  const hasSprints = sprintSpecialist[1] > 0;
 
   document.getElementById('keyStats').innerHTML = `
     <div class="stat-card"><div class="stat-val">🏆</div><div class="stat-player">${hasScores?leader[0]:'—'}</div><div class="stat-name">Current Leader</div><div class="stat-val" style="font-size:1rem">${hasScores?leader[1]+' pts':'No data yet'}</div></div>
     <div class="stat-card"><div class="stat-val">${races.length} <span style="font-size:1rem;color:#666">/ 24</span></div><div class="stat-name">Rounds Scored</div></div>
     <div class="stat-card"><div class="stat-val">${hasPoles?mostPoles[1]:'—'}</div><div class="stat-player">${hasPoles?mostPoles[0]:''}</div><div class="stat-name">Most Pole Calls</div></div>
     <div class="stat-card"><div class="stat-val">${hasWins?mostWins[1]:'—'}</div><div class="stat-player">${hasWins?mostWins[0]:''}</div><div class="stat-name">Most Win Calls</div></div>
+    <div class="stat-card"><div class="stat-val">${hasSprints?sprintSpecialist[1]:'—'}</div><div class="stat-player">${hasSprints?sprintSpecialist[0]:''}</div><div class="stat-name">Sprint Specialist</div></div>
     <div class="stat-card"><div class="stat-val">${hasFastLaps?mostFastLaps[1]:'—'}</div><div class="stat-player">${hasFastLaps?mostFastLaps[0]:''}</div><div class="stat-name">Most Fast Laps</div></div>
     <div class="stat-card"><div class="stat-val">${fewestMissed[1]}</div><div class="stat-player">${fewestMissed[0]}</div><div class="stat-name">Fewest Missed</div></div>
     <div class="stat-card"><div class="stat-val">${avgLeader[1]}</div><div class="stat-player">${avgLeader[0]}</div><div class="stat-name">Best Avg / Round</div></div>`;
@@ -677,7 +827,7 @@ async function loadSeason() {
   pointsChartInst=new Chart(document.getElementById('pointsChart'),{ type:'line', data:{labels:raceLabels,datasets}, options:{responsive:true,plugins:{legend:{labels:{color:'#ccc',font:{size:11}}}},scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#2a2a3a'}},y:{ticks:{color:'#888'},grid:{color:'#2a2a3a'}}}}});
 
   const sortedSplit=PLAYERS.slice().sort((a,b)=>totFlat[b]-totFlat[a]);
-  document.getElementById('splitTable').innerHTML=`<table class="data-table"><thead><tr><th>Player</th><th>Quali</th><th>Race</th><th>Fast Lap</th><th>Race %</th></tr></thead><tbody>${sortedSplit.map(p=>{ const tot=qualiTots[p]+raceTots[p]+fastLapTots[p]; const pct=tot>0?Math.round((raceTots[p]/tot)*100):0; return `<tr style="color:#f0f0f0"><td><strong>${p}</strong></td><td>${qualiTots[p]}</td><td>${raceTots[p]}</td><td>${fastLapTots[p]}</td><td>${pct}%</td></tr>`; }).join('')}</tbody></table>`;
+  document.getElementById('splitTable').innerHTML=`<table class="data-table"><thead><tr><th>Player</th><th>Quali %</th><th>Sprint %</th><th>Race %</th><th>Fast Lap %</th><th>Total</th></tr></thead><tbody>${sortedSplit.map(p=>{ const tot=qualiTots[p]+sprintTots[p]+raceTots[p]+fastLapTots[p]; const qPct=tot>0?Math.round((qualiTots[p]/tot)*100):0; const sPct=tot>0?Math.round((sprintTots[p]/tot)*100):0; const rPct=tot>0?Math.round((raceTots[p]/tot)*100):0; const flPct=tot>0?Math.round((fastLapTots[p]/tot)*100):0; return `<tr style="color:#f0f0f0"><td><strong>${p}</strong></td><td>${qPct}%</td><td>${sPct}%</td><td>${rPct}%</td><td>${flPct}%</td><td>${tot}</td></tr>`; }).join('')}</tbody></table>`;
   document.getElementById('missedTable').innerHTML=`<table class="data-table"><thead><tr><th>Player</th><th>Missed</th><th></th></tr></thead><tbody>${PLAYERS.slice().sort((a,b)=>missedCounts[a]-missedCounts[b]).map(p=>`<tr style="color:#f0f0f0"><td><strong>${p}</strong></td><td>${missedCounts[p]}</td><td>${missedCounts[p]===0?`<span class="badge green">Perfect</span>`:missedCounts[p]===1?`<span class="badge" style="background:#3a2a0a;color:#ffaa44;border:1px solid #5a4a0a">1 missed</span>`:`<span class="badge" style="background:#3a1a1a;color:#ff6b6b;border:1px solid #5a2a2a">${missedCounts[p]} missed</span>`}</td></tr>`).join('')}</tbody></table>`;
 
   const vol=(() =>{ let mx=0,k='—',found=false; PLAYERS.forEach(p=>{ const pts=races.map(r=>(scores.find(s=>s.race_id===r.id&&s.player_name===p)||{total_score:0}).total_score); const nz=pts.filter(x=>x>0); if(nz.length<2)return; const sw=Math.max(...pts)-Math.min(...nz); if(sw>mx){mx=sw;k=p;found=true;} }); return found?[k,mx]:['—','N/A']; })();
@@ -689,6 +839,7 @@ async function loadSeason() {
     {icon:'🎯',title:'Most Pole Calls',player:hasPoles?mostPoles[0]:'—',detail:hasPoles?`${mostPoles[1]} correct poles`:'No data yet'},
     {icon:'🏁',title:'Most Win Calls',player:hasWins?mostWins[0]:'—',detail:hasWins?`${mostWins[1]} correct winners`:'No data yet'},
     {icon:'⚡',title:'Hot Lap Hero',player:hasFastLaps?mostFastLaps[0]:'—',detail:hasFastLaps?`${mostFastLaps[1]} fastest laps called`:'No data yet'},
+    {icon:'🚀',title:'Sprint Specialist',player:hasSprints?sprintSpecialist[0]:'—',detail:hasSprints?`${sprintSpecialist[1]} sprint pts`:'No data yet'},
     {icon:'⏱️',title:'Mr Saturday',player:mrSat[0],detail:`${mrSat[1]} qualifying pts`},
     {icon:'🌞',title:'Sunday Merchant',player:mrSun[0],detail:`${mrSun[1]} race pts`},
     {icon:'🎢',title:'Volatility King',player:vol[0],detail:vol[1]==='N/A'?'Need 2+ rounds':`${vol[1]}pt swing`},
@@ -714,7 +865,24 @@ async function loadLastPublished() {
         const seasonSel = document.getElementById('seasonSel');
         seasonSel.value = season;
         await loadRaces();
-        document.getElementById('raceSel').value = round;
+        const raceSel = document.getElementById('raceSel');
+
+        // Find the option corresponding to the last published round
+        let selectedValue = String(round);
+        let foundIndex = -1;
+        for (let i = 0; i < raceSel.options.length; i++) {
+          if (raceSel.options[i].value === String(round)) {
+            foundIndex = i;
+            break;
+          }
+        }
+
+        // For predictions, prefer the next race if one exists
+        if (foundIndex !== -1 && foundIndex + 1 < raceSel.options.length) {
+          selectedValue = raceSel.options[foundIndex + 1].value;
+        }
+
+        raceSel.value = selectedValue;
         await onRaceChange();
       }
     } else {
