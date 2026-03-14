@@ -20,6 +20,7 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 |------|-------------|
 | `index.html` | Main NigeBot app — predictions, leaderboard, stats, scoring guide |
 | `test.html` | Man Cave — admin tools, test suite, results publishing |
+| `sql/add_nigebot_player.sql` | Backfill NigeBot’s scores (Australia) and predictions (China); run in Supabase SQL Editor |
 
 ---
 
@@ -28,14 +29,14 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 ### For Players
 1. Open NigeBot — the most recently published race loads automatically  
 2. Enter your top 3 predictions for **qualifying** and the **Grand Prix** using 3-letter driver codes (e.g. `VER`, `HAM`, `NOR`)  
-3. On Sprint weekends, also enter your top 3 for the **Sprint Race**, and pick the **fastest lap** driver for the Grand Prix  
-4. Hit **Save All Predictions** — predictions lock automatically when qualifying begins  
-5. Check back after the race weekend — results and scores will be published here. On the **Results** tab, the Race column shows Grand Prix P1–P3, Sprint P1–P3 where applicable, plus the fastest lap
+3. On Sprint weekends, also enter your top 3 for the **Sprint Race**, and pick the **fastest lap** driver for the Grand Prix. On sprint weekends the Predictions tab shows sections in order: Sprint Race, Qualifying, Race, Fastest Lap.  
+4. Hit **Save your predictions** — predictions lock automatically when qualifying begins  
+5. Check back after the race weekend — results and scores will be published here. On the **Results** tab, **Actual Results** are shown in four columns: Qualifying, Race, Sprint (on sprint weekends), Fastest Lap. Per-player score cards use the same section order on sprint weekends (Sprint, Qualifying, Race, Fastest Lap).
 
 ### For Admins (Tim & Ollie)
 1. Open Man Cave after the race weekend
 2. Go to **Tests** tab and run all tests — confirm Jolpica API is green and current round has full results
-3. Go to **Results** tab — select the season and round. The “Actual Results” card shows qualifying P1–P3, Grand Prix P1–P3, Sprint P1–P3 where applicable, plus fastest lap
+3. Go to **Results** tab — select the season and round. The **Actual Results** card shows four columns: Qualifying, Race, Sprint (on sprint weekends), Fastest Lap
 4. Hit **Fetch Results** and review the score preview for all players (sorted highest to lowest)
 5. When ready, the **Publish Results to NigeBot** button turns amber — hit it to push scores live
 6. Button turns green with a timestamp once published — "Last published" also updates with race name and time
@@ -147,7 +148,7 @@ The Tests tab runs a suite of checks across four groups:
 
 ## Score Preview
 
-The score preview in the Results tab shows all seven players sorted by score, highest first. Each prediction is colour-coded with a symbol:
+The score preview in the Results tab shows all seven players sorted by score, highest first. On sprint weekends, each player’s card shows sections in order: **Sprint**, **Qualifying**, **Race**, **Fastest Lap**. Each prediction is colour-coded with a symbol:
 
 - `✓` green — exact match
 - `~` amber — one position off (half points)
@@ -164,6 +165,12 @@ The score preview in the Results tab shows all seven players sorted by score, hi
 > Re-publishing is allowed and will overwrite scores and update the timestamp.
 
 ---
+
+## Players
+
+The app supports eight players: Ollie, Tom, Tim, Ralph, Herbie, Dave, Jason, and **NigeBot**. NigeBot receives **0 points for Australia** (Round 1) and **0 sprint points** on sprint weekends; his quali, race, and fastest-lap scores are calculated normally.
+
+**Adding NigeBot (backfill):** NigeBot has no predictions for Australia and no sprint predictions for China. The script `sql/add_nigebot_player.sql` inserts his Australia scores (all zeros) and his China predictions (quali, race, fastest lap only). Run the script in the Supabase Dashboard → SQL Editor (paste and run); then re-publish China from Man Cave so his China score (with 0 sprint) is calculated.
 
 ## Driver Codes
 
