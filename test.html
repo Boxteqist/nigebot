@@ -406,7 +406,7 @@ async function fetchPreview() {
       publishBtn.textContent = '🔒 Publish Results to NigeBot';
     }
 
-    previewData = { season, round, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], preds, hasQual, hasRace, fastestLapDriver };
+    previewData = { season, round, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], sTop3: sTop3||null, hasSprint, preds, hasQual, hasRace, fastestLapDriver };
     section.classList.remove('hidden');
     msg.className = hasQual && hasRace ? 'status-msg success' : 'status-msg info';
     msg.textContent = hasQual && hasRace
@@ -419,7 +419,7 @@ async function fetchPreview() {
 
 async function publishResults() {
   if (!previewData) return;
-  const { season, round, raceId, raceName, qTop3, rTop3, preds, fastestLapDriver } = previewData;
+  const { season, round, raceId, raceName, qTop3, rTop3, sTop3, hasSprint, preds, fastestLapDriver } = previewData;
   const btn = document.getElementById('publishBtn');
   const msg = document.getElementById('publishMsg');
   btn.disabled = true;
@@ -476,119 +476,6 @@ async function publishResults() {
     msg.className = 'status-msg error'; msg.textContent = `❌ ${e.message}`;
     btn.disabled = false;
   }
-}
-
-// ---- WHATSAPP (inline in Results tab) ----
-async function generateMessage() {
-  if (!previewData) return;
-  const { season, round, raceName, raceId, qTop3, rTop3, preds, hasQual, hasRace } = previewData;
-  const status = document.getElementById('waStatus');
-  const preview = document.getElementById('waPreview');
-  preview.classList.add('hidden');
-  status.className='status-msg info'; status.textContent='⏳ Gathering data...'; status.classList.remove('hidden');
-
-  try {
-    // Calculate scores from previewData directly — no need to have published first
-    const scores = PLAYERS.map(player => {
-      const p = preds.find(x => x.player_name === player);
-      const qPreds = p ? [p.quali_p1,p.quali_p2,p.quali_p3] : [null,null,null];
-      const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
-      const qs = hasQual ? calcScore(qPreds, qTop3, QUALI_PTS) : 0;
-      const rs = hasRace ? calcScore(rPreds, rTop3, RACE_PTS)  : 0;
-      return { player_name:player, quali_score:qs, race_score:rs, total_score:qs+rs };
-    }).sort((a,b) => b.total_score - a.total_score);
-
-    const allSeasonRaces = await sbGet(`races?season=eq.${season}&order=round.asc`);
-
-    // Season totals — pull published scores from DB and layer this race's live scores on top
-    const allIds = allSeasonRaces.map(r=>r.id).join(',');
-    const allScores = await sbGet(`scores?race_id=in.(${allIds})`);
-    const seasonTotals = {};
-    PLAYERS.forEach(p => seasonTotals[p] = 0);
-    // Add all previously published scores except this race (we'll use live calc instead)
-    allScores.filter(s => s.race_id !== raceId).forEach(s => {
-      if (seasonTotals[s.player_name]!==undefined) seasonTotals[s.player_name]+=s.total_score;
-    });
-    // Add this race's live-calculated scores
-    scores.forEach(s => { if (seasonTotals[s.player_name]!==undefined) seasonTotals[s.player_name]+=s.total_score; });
-    const leaderboard = Object.entries(seasonTotals).sort((a,b)=>b[1]-a[1]);
-
-    const prevRaces = allSeasonRaces.filter(r=>r.round<parseInt(round));
-    let biggestMover = null;
-    if (prevRaces.length) {
-      const prevIds = prevRaces.map(r=>r.id).join(',');
-      const prevScores = await sbGet(`scores?race_id=in.(${prevIds})`);
-      const prevTotals = {};
-      PLAYERS.forEach(p => prevTotals[p]=0);
-      prevScores.forEach(s => { if(prevTotals[s.player_name]!==undefined) prevTotals[s.player_name]+=s.total_score; });
-      const prevRanks = Object.entries(prevTotals).sort((a,b)=>b[1]-a[1]).map(([p],i)=>({p,rank:i+1}));
-      const newRanks  = leaderboard.map(([p],i)=>({p,rank:i+1}));
-      let maxMove=0;
-      newRanks.forEach(({p,rank})=>{
-        const prev=prevRanks.find(x=>x.p===p);
-        if(prev&&(prev.rank-rank)>maxMove){maxMove=prev.rank-rank;biggestMover={name:p,places:maxMove};}
-      });
-    }
-
-    const zeroScorers = scores.filter(s=>s.total_score===0).map(s=>s.player_name);
-
-    status.textContent='⏳ Fetching fastest lap...';
-    const flRes = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/fastest/1/`);
-    const flData = await flRes.json();
-    const fastestLap=flData.MRData.RaceTable.Races[0]?.Results?.[0];
-    const fastestLapStr=fastestLap?`${fastestLap.Driver.familyName} (${fastestLap.FastestLap.Time.time})`:null;
-
-    const extraContext = document.getElementById('waContext').value.trim();
-
-    status.textContent='⏳ Generating message...';
-    const prompt = `You are NigeBot, the F1 predictions tracker for a group of mates called the Park Estate group. Write a WhatsApp message announcing the results of the ${raceName} ${season} prediction game.
-
-Tone: dry British banter, wicked but harmless sense of humour. Occasionally take a gentle dig at Max Verstappen but not every time. Keep it punchy — this is a WhatsApp message, not an essay. Use emojis sparingly but effectively.
-
-Race data:
-- Qualifying top 3: ${qTop3.join(', ')||'unavailable'}
-- Race top 3: ${rTop3.join(', ')||'unavailable'}
-- Fastest lap: ${fastestLapStr || (parseInt(round,10) === 1 ? 'not used for Round 1' : 'unavailable')}
-${extraContext?`\nExtra context from the admin (weave this in naturally):\n${extraContext}`:''}
-
-Prediction scores this round (ordered by score):
-${scores.map((s,i)=>`${i+1}. ${s.player_name} — ${s.total_score} pts (Quali: ${s.quali_score}, Race: ${s.race_score})`).join('\n')}
-
-Season leaderboard after this round:
-${leaderboard.map(([p,t],i)=>`${i+1}. ${p} — ${t} pts`).join('\n')}
-
-Additional context:
-${biggestMover?`- Biggest mover: ${biggestMover.name} moved up ${biggestMover.places} place${biggestMover.places>1?'s':''} in the standings`:'- No significant position changes this round'}
-${zeroScorers.length?`- Scored zero points: ${zeroScorers.join(', ')}`:'- Everyone scored points this round'}
-
-Include: a brief nod to the race itself, round scores with a comment on the winner, a dig at anyone who scored zero, the biggest mover if relevant, the fastest lap, and the season standings. End with the NigeBot link: boxteqist.github.io/nigebot`;
-
-    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] })
-    });
-    const apiData = await apiRes.json();
-    const message = apiData.content?.[0]?.text;
-    if (!message) throw new Error('No message returned from Claude');
-    document.getElementById('waText').value = message;
-    preview.classList.remove('hidden');
-    status.className='status-msg success'; status.textContent='✅ Message generated!';
-  } catch(e) {
-    status.className='status-msg error'; status.textContent=`❌ ${e.message}`;
-  }
-}
-
-function copyMessage() {
-  navigator.clipboard.writeText(document.getElementById('waText').value).then(()=>{
-    const el=document.getElementById('copyConfirm');
-    el.classList.remove('hidden');
-    setTimeout(()=>el.classList.add('hidden'),3000);
-  });
 }
 
 // ---- TESTS TAB ----
