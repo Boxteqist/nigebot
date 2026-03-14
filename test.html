@@ -334,8 +334,8 @@ async function fetchPreview() {
       if (sprintBlock) sprintBlock.classList.add('hidden');
     }
 
-    // Show fastest lap under Race column; Round 1 shows a hyphen because we don't count it
-    const flLabel = parseInt(round,10) === 1 ? '—' : (fastestLapDriver || '—');
+    // Show fastest lap under Race column; Round 1 not used; otherwise show driver or pending
+    const flLabel = parseInt(round,10) === 1 ? '—' : (fastestLapDriver || 'pending');
     document.getElementById('arr_fl').textContent = flLabel;
 
     const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
@@ -384,7 +384,7 @@ async function fetchPreview() {
         ${predLine(qPreds[0],qTop3,'P1')}${predLine(qPreds[1],qTop3,'P2')}${predLine(qPreds[2],qTop3,'P3')}
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Race (${rScore!==null?rScore:'pending'})</div>
         ${predLine(rPreds[0],rTop3,'P1')}${predLine(rPreds[1],rTop3,'P2')}${predLine(rPreds[2],rTop3,'P3')}
-        <div class="section-title" style="font-size:0.68rem;margin-top:8px">Fastest Lap (${parseInt(round,10)>1 ? (fastestLapDriver ? (flScore ? flScore+' pts' : '0 pts') : 'unavailable') : 'not used'})</div>
+        <div class="section-title" style="font-size:0.68rem;margin-top:8px">Fastest Lap (${parseInt(round,10)>1 ? (fastestLapDriver ? (flScore ? flScore+' pts' : '0 pts') : 'pending') : 'not used'})</div>
         <div class="pred-line ${flScore? 'exact':'miss'}"><span class="pos-label">FL</span><span class="driver">${flPred||'—'}${flScore? ' ✓':''}</span></div>
       </div>`;
     }).join('');
