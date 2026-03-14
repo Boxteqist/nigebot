@@ -30,13 +30,13 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 1. Open NigeBot — the most recently published race loads automatically  
 2. Enter your top 3 predictions for **qualifying** and the **Grand Prix** using 3-letter driver codes (e.g. `VER`, `HAM`, `NOR`)  
 3. On Sprint weekends, also enter your top 3 for the **Sprint Race**, and pick the **fastest lap** driver for the Grand Prix. On sprint weekends the Predictions tab shows sections in order: Sprint Race, Qualifying, Race, Fastest Lap.  
-4. Hit **Save your predictions** — predictions lock automatically when qualifying begins  
-5. Check back after the race weekend — results and scores will be published here. On the **Results** tab, **Actual Results** are shown in four columns: Qualifying, Race, Sprint (on sprint weekends), Fastest Lap. Per-player score cards use the same section order on sprint weekends (Sprint, Qualifying, Race, Fastest Lap).
+4. Hit **Save** under your name (each player has their own Save button at the bottom of their column). Predictions lock automatically when qualifying begins — after that, no more changes can be made for this weekend.  
+5. Check back after the race weekend — results and scores will be published here. On the **Results** tab, **Actual Results** are shown in four columns (on sprint weekends): Sprint, Qualifying, Race, Fastest Lap. Per-player score cards use the same order.
 
 ### For Admins (Tim & Ollie)
 1. Open Man Cave after the race weekend
 2. Go to **Tests** tab and run all tests — confirm Jolpica API is green and current round has full results
-3. Go to **Results** tab — select the season and round. The **Actual Results** card shows four columns: Qualifying, Race, Sprint (on sprint weekends), Fastest Lap
+3. Go to **Results** tab — select the season and round. The **Actual Results** card shows four columns (on sprint weekends): Sprint, Qualifying, Race, Fastest Lap
 4. Hit **Fetch Results** and review the score preview for all players (sorted highest to lowest)
 5. When ready, the **Publish Results to NigeBot** button turns amber — hit it to push scores live
 6. Button turns green with a timestamp once published — "Last published" also updates with race name and time
@@ -148,7 +148,7 @@ The Tests tab runs a suite of checks across four groups:
 
 ## Score Preview
 
-The score preview in the Results tab shows all seven players sorted by score, highest first. On sprint weekends, each player’s card shows sections in order: **Sprint**, **Qualifying**, **Race**, **Fastest Lap**. Each prediction is colour-coded with a symbol:
+The score preview in the Results tab shows all eight players sorted by score, highest first. On sprint weekends, each player’s card shows sections in order: **Sprint**, **Qualifying**, **Race**, **Fastest Lap**. Each prediction is colour-coded with a symbol:
 
 - `✓` green — exact match
 - `~` amber — one position off (half points)

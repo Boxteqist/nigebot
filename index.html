@@ -28,12 +28,14 @@
   input, select { background: #0f0f13; border: 1px solid #3a3a4a; border-radius: 8px; padding: 9px 12px; color: #fff; font-size: 0.9rem; width: 100%; }
   input:focus, select:focus { outline: none; border-color: #e10600; }
   input:disabled { background: #1a1a24; color: #555; cursor: not-allowed; border-color: #2a2a3a; }
+  .player-pred-card input:disabled { color: #fff; background: #1a1a2a; border-color: #3a3a4a; }
   select option { background: #1a1a24; }
   .btn { background: #DC0000; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: background 0.2s; }
   .btn:hover { background: #b00000; }
-  .btn.green { background: #1a7f37; }
+  .btn.green { background: #1a7f37; color: #fff; }
   .btn.green:hover { background: #16632b; }
   .btn:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
+  .btn.green:disabled { color: #fff; }
   .btn.full { width: 100%; padding: 13px; font-size: 1rem; border-radius: 10px; }
   .tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
   .tab { background: #2a2a3a; border: none; color: #888; border-radius: 8px; padding: 9px 18px; cursor: pointer; font-size: 0.88rem; font-weight: 600; transition: all 0.2s; }
@@ -47,6 +49,7 @@
   @media(max-width:420px) { .pred-grid { grid-template-columns: 1fr; } }
   .player-pred-card { background: #0f0f13; border: 1px solid #2a2a3a; border-radius: 10px; padding: 14px; }
   .player-pred-card h3 { font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 12px; border-bottom: 1px solid #2a2a3a; padding-bottom: 8px; }
+  .player-pred-card .section-title { color: #fff; }
   .player-pred-card input { margin-bottom: 8px; font-size: 0.85rem; padding: 7px 10px; }
   .badge { display: inline-block; border-radius: 6px; padding: 4px 10px; font-size: 0.82rem; font-weight: 600; }
   .badge.green { background: #1a3a1a; color: #4caf50; border: 1px solid #2a5a2a; }
@@ -114,7 +117,7 @@
   <div class="container">
 
   <div id="predLockBanner" class="lock-banner hidden">
-    🔒 <strong>Predictions are locked.</strong> Qualifying has started — no more changes can be made for this race.
+    🔒 <strong>Predictions are locked.</strong> Qualifying has started — no more changes can be made for this weekend.
   </div>
   <div id="predOpenBanner" style="background:#2a1a0a;border:1px solid #5a3a1a;border-radius:8px;padding:8px 14px;font-size:0.9rem;color:#ffd27f;margin-bottom:16px;font-weight:600;">
     <div id="lockCountdown"></div>
@@ -151,7 +154,6 @@
     <div class="card hidden" id="predictionsCard">
       <h2>Predictions</h2>
       <div class="pred-grid" id="predGrid"></div>
-      <button class="btn full" id="saveBtn" style="margin-top:16px" onclick="savePredictions()">💾 Save your predictions</button>
       <div id="saveStatus" class="status-msg hidden"></div>
     </div>
     <div id="noRaceMsg" style="text-align:center;color:#888;font-size:0.9rem;padding:40px 0;">
@@ -392,19 +394,18 @@ function isLocked() {
 
 function applyLockState() {
   const locked = isLocked();
-  const saveBtn = document.getElementById('saveBtn');
   document.getElementById('predLockBanner').classList.toggle('hidden', !locked);
   document.getElementById('predOpenBanner').classList.toggle('hidden', locked);
-  if (saveBtn) {
-    saveBtn.disabled = locked;
+  document.querySelectorAll('.player-save-btn').forEach(btn => {
+    btn.disabled = locked;
     if (locked) {
-      saveBtn.textContent = "🔒 We're locked and loaded.";
-      saveBtn.classList.add('green');
+      btn.textContent = "🔒 We're locked and loaded.";
+      btn.classList.add('green');
     } else {
-      saveBtn.textContent = '💾 Save your predictions';
-      saveBtn.classList.remove('green');
+      btn.textContent = '💾 Save';
+      btn.classList.remove('green');
     }
-  }
+  });
   document.querySelectorAll('#predGrid input').forEach(el => {
     el.disabled = locked;
     if (locked) el.style.borderColor = '';
@@ -574,6 +575,8 @@ function renderPredGrid() {
           ? `<div style="font-size:0.8rem;color:#888;">unavailable for Australia</div>`
           : inp(`${p}_fl`,'Driver code')
       }
+      <button type="button" class="btn player-save-btn" data-player="${p}" style="margin-top:10px;width:100%;padding:8px" onclick="savePlayerPredictions('${p}')">💾 Save</button>
+      <div class="player-save-status" id="saveStatus_${p}" style="font-size:0.75rem;margin-top:4px;min-height:1em;"></div>
     </div>`).join('');
 }
 
@@ -600,40 +603,59 @@ function setVal(id,val) { const el=document.getElementById(id); if(el&&val) el.v
 function setBadge(id,val) { const el=document.getElementById(id); if(el&&val){el.textContent=val;el.className='badge green';} }
 function getVal(id) { const el=document.getElementById(id); return el?el.value.trim():''; }
 
-async function savePredictions() {
+function setPlayerSaveStatus(player, msg, isError) {
+  const el = document.getElementById(`saveStatus_${player}`);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? '#ff6b6b' : '#4caf50';
+  el.classList.remove('hidden');
+  if (el._statusTimer) clearTimeout(el._statusTimer);
+  el._statusTimer = setTimeout(() => { el.textContent = ''; el._statusTimer = null; }, 3000);
+}
+
+async function savePlayerPredictions(player) {
   if (!currentRaceId) { showStatus('saveStatus','error','Select a race first.'); return; }
-  if (isLocked()) { showStatus('saveStatus','error','🔒 Predictions are locked — qualifying has started.'); return; }
+  if (isLocked()) { showStatus('saveStatus','error','🔒 Predictions are locked — no more changes can be made for this weekend.'); return; }
   const invalid = [];
-  PLAYERS.forEach(p => {
-    ['q1','q2','q3','r1','r2','r3'].forEach(f => {
-      const val = getVal(`${p}_${f}`);
-      if (val && !DRIVER_CODES[val.toUpperCase()]) invalid.push(`${p}: ${val}`);
-    });
-    if (currentIsSprintWeekend) {
-      ['s1','s2','s3'].forEach(f => {
-        const val = getVal(`${p}_${f}`);
-        if (val && !DRIVER_CODES[val.toUpperCase()]) invalid.push(`${p}: ${val} (sprint)`);
-      });
-    }
-    if (currentRound && currentRound > 1) {
-      const fl = getVal(`${p}_fl`);
-      if (fl && !DRIVER_CODES[fl.toUpperCase()]) invalid.push(`${p}: ${fl} (fastest lap)`);
-    }
+  ['q1','q2','q3','r1','r2','r3'].forEach(f => {
+    const val = getVal(`${player}_${f}`);
+    if (val && !DRIVER_CODES[val.toUpperCase()]) invalid.push(val);
   });
-  if (invalid.length) { showStatus('saveStatus','error',`❌ Invalid driver codes: ${invalid.join(', ')}`); return; }
-  const rows = PLAYERS.map(p => ({
-    race_id: currentRaceId, player_name: p,
-    quali_p1:getVal(`${p}_q1`).toUpperCase(),quali_p2:getVal(`${p}_q2`).toUpperCase(),quali_p3:getVal(`${p}_q3`).toUpperCase(),
-    sprint_p1: currentIsSprintWeekend ? getVal(`${p}_s1`).toUpperCase() : null,
-    sprint_p2: currentIsSprintWeekend ? getVal(`${p}_s2`).toUpperCase() : null,
-    sprint_p3: currentIsSprintWeekend ? getVal(`${p}_s3`).toUpperCase() : null,
-    race_p1:getVal(`${p}_r1`).toUpperCase(),race_p2:getVal(`${p}_r2`).toUpperCase(),race_p3:getVal(`${p}_r3`).toUpperCase(),
-    fastest_lap: currentRound && currentRound > 1 ? getVal(`${p}_fl`).toUpperCase() : null,
+  if (currentIsSprintWeekend) {
+    ['s1','s2','s3'].forEach(f => {
+      const val = getVal(`${player}_${f}`);
+      if (val && !DRIVER_CODES[val.toUpperCase()]) invalid.push(`${val} (sprint)`);
+    });
+  }
+  if (currentRound && currentRound > 1) {
+    const fl = getVal(`${player}_fl`);
+    if (fl && !DRIVER_CODES[fl.toUpperCase()]) invalid.push(`${fl} (fastest lap)`);
+  }
+  if (invalid.length) {
+    setPlayerSaveStatus(player, `Invalid: ${invalid.join(', ')}`, true);
+    return;
+  }
+  const row = {
+    race_id: currentRaceId,
+    player_name: player,
+    quali_p1: getVal(`${player}_q1`).toUpperCase(),
+    quali_p2: getVal(`${player}_q2`).toUpperCase(),
+    quali_p3: getVal(`${player}_q3`).toUpperCase(),
+    sprint_p1: currentIsSprintWeekend ? getVal(`${player}_s1`).toUpperCase() : null,
+    sprint_p2: currentIsSprintWeekend ? getVal(`${player}_s2`).toUpperCase() : null,
+    sprint_p3: currentIsSprintWeekend ? getVal(`${player}_s3`).toUpperCase() : null,
+    race_p1: getVal(`${player}_r1`).toUpperCase(),
+    race_p2: getVal(`${player}_r2`).toUpperCase(),
+    race_p3: getVal(`${player}_r3`).toUpperCase(),
+    fastest_lap: currentRound && currentRound > 1 ? getVal(`${player}_fl`).toUpperCase() : null,
     submitted_at: new Date().toISOString()
-  }));
-  const res = await sbUpsert('predictions', rows);
-  if (res && !res.error) { showStatus('saveStatus','success','✅ All predictions saved!'); isDirty = false; }
-  else showStatus('saveStatus','error','❌ Error saving.');
+  };
+  const res = await sbUpsert('predictions', [row]);
+  if (res && !res.error) {
+    setPlayerSaveStatus(player, 'Saved', false);
+  } else {
+    setPlayerSaveStatus(player, 'Error saving.', true);
+  }
 }
 
 // ---- RESULTS TAB ----
