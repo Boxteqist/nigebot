@@ -84,9 +84,10 @@
   .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 20px; }
   @media(max-width:600px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
   .stat-card { background: #0f0f13; border: 1px solid #2a2a3a; border-radius: 10px; padding: 14px; text-align: center; }
-  .stat-card .stat-val { font-size: 1.4rem; font-weight: 800; color: #e10600; }
-  .stat-card .stat-name { font-size: 0.75rem; color: #888; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .stat-card .stat-player { font-size: 0.9rem; font-weight: 700; color: #fff; margin-top: 2px; }
+  .stat-card .stat-name { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .stat-card .stat-player { font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .stat-card .stat-val { font-size: 1.35rem; font-weight: 800; color: #e10600; }
+  .stat-card .stat-val .stat-val--muted { font-size: 1rem; font-weight: 600; color: #666; }
   .award-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
   @media(max-width:500px) { .award-grid { grid-template-columns: 1fr; } }
   .award-card { background: #0f0f13; border: 1px solid #2a2a3a; border-radius: 10px; padding: 14px; display: flex; align-items: center; gap: 12px; }
@@ -717,7 +718,9 @@ async function loadResultsForRace() {
     document.getElementById('res_sr1').textContent = r.sprint_p1 || '—';
     document.getElementById('res_sr2').textContent = r.sprint_p2 || '—';
     document.getElementById('res_sr3').textContent = r.sprint_p3 || '—';
-    document.getElementById('res_fl').textContent = r.fastest_lap || '—';
+    const flEl = document.getElementById('res_fl');
+    flEl.textContent = r.fastest_lap || '—';
+    flEl.style.color = r.fastest_lap ? '#ffd700' : '';
     document.getElementById('resultsActual').classList.remove('hidden');
 
     const qTop3 = [r.quali_p1, r.quali_p2, r.quali_p3];
@@ -791,20 +794,21 @@ async function loadSeason() {
 
   // Leaderboard
   const totals = {};
-  PLAYERS.forEach(p => totals[p] = {q:0,r:0,s:0,t:0});
+  PLAYERS.forEach(p => totals[p] = {q:0,r:0,s:0,fl:0,t:0});
   scores.forEach(s => {
     if(totals[s.player_name]) {
       totals[s.player_name].q+=s.quali_score;
       totals[s.player_name].r+=s.race_score;
       totals[s.player_name].s+=(s.sprint_score||0);
+      totals[s.player_name].fl+=(s.fastest_lap_score||0);
       totals[s.player_name].t+=s.total_score;
     }});
   const sorted = Object.entries(totals).sort((a,b)=>b[1].t-a[1].t);
   const medals = ['🥇','🥈','🥉'];
   document.getElementById('leaderboard').innerHTML = `
     <table class="data-table">
-      <thead><tr><th>#</th><th>Player</th><th>Quali</th><th>Race</th><th>Total</th></tr></thead>
-      <tbody>${sorted.map(([name,s],i)=>`<tr><td>${medals[i]||i+1}</td><td><strong>${name}</strong></td><td>${s.q}</td><td>${s.r}</td><td>${s.t}</td></tr>`).join('')}</tbody>
+      <thead><tr><th>#</th><th>Player</th><th>Quali</th><th>Sprint</th><th>Race</th><th>FL</th><th>Total</th></tr></thead>
+      <tbody>${sorted.map(([name,s],i)=>`<tr><td>${medals[i]||i+1}</td><td><strong>${name}</strong></td><td>${s.q}</td><td>${s.s}</td><td>${s.r}</td><td>${s.fl}</td><td>${s.t}</td></tr>`).join('')}</tbody>
     </table>`;
 
   if (!races.length) { document.getElementById('keyStats').innerHTML='<p style="color:#888;font-size:0.85rem;grid-column:1/-1">No scored races yet.</p>'; return; }
@@ -852,17 +856,18 @@ async function loadSeason() {
   const hasSprints = sprintSpecialist[1] > 0;
 
   document.getElementById('keyStats').innerHTML = `
-    <div class="stat-card"><div class="stat-val">🏆</div><div class="stat-player">${hasScores?leader[0]:'—'}</div><div class="stat-name">Current Leader</div><div class="stat-val" style="font-size:1rem">${hasScores?leader[1]+' pts':'No data yet'}</div></div>
-    <div class="stat-card"><div class="stat-val">${races.length} <span style="font-size:1rem;color:#666">/ 24</span></div><div class="stat-name">Rounds Scored</div></div>
-    <div class="stat-card"><div class="stat-val">${hasPoles?mostPoles[1]:'—'}</div><div class="stat-player">${hasPoles?mostPoles[0]:''}</div><div class="stat-name">Most Pole Calls</div></div>
-    <div class="stat-card"><div class="stat-val">${hasWins?mostWins[1]:'—'}</div><div class="stat-player">${hasWins?mostWins[0]:''}</div><div class="stat-name">Most Win Calls</div></div>
-    <div class="stat-card"><div class="stat-val">${hasSprints?sprintSpecialist[1]:'—'}</div><div class="stat-player">${hasSprints?sprintSpecialist[0]:''}</div><div class="stat-name">Sprint Specialist</div></div>
-    <div class="stat-card"><div class="stat-val">${hasFastLaps?mostFastLaps[1]:'—'}</div><div class="stat-player">${hasFastLaps?mostFastLaps[0]:''}</div><div class="stat-name">Most Fast Laps</div></div>
-    <div class="stat-card"><div class="stat-val">${fewestMissed[1]}</div><div class="stat-player">${fewestMissed[0]}</div><div class="stat-name">Fewest Missed</div></div>
-    <div class="stat-card"><div class="stat-val">${avgLeader[1]}</div><div class="stat-player">${avgLeader[0]}</div><div class="stat-name">Best Avg / Round</div></div>`;
+    <div class="stat-card"><div class="stat-name">Current Leader</div><div class="stat-player">${hasScores?leader[0]:'—'}</div><div class="stat-val">${hasScores?leader[1]+' pts':'No data yet'}</div></div>
+    <div class="stat-card"><div class="stat-name">Rounds Scored</div><div class="stat-player">&nbsp;</div><div class="stat-val">${races.length} <span class="stat-val--muted">/ 24</span></div></div>
+    <div class="stat-card"><div class="stat-name">Most Pole Calls</div><div class="stat-player">${hasPoles?mostPoles[0]:'—'}</div><div class="stat-val">${hasPoles?mostPoles[1]:'—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Most Win Calls</div><div class="stat-player">${hasWins?mostWins[0]:'—'}</div><div class="stat-val">${hasWins?mostWins[1]:'—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Sprint Specialist</div><div class="stat-player">${hasSprints?sprintSpecialist[0]:'—'}</div><div class="stat-val">${hasSprints?sprintSpecialist[1]:'—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Most Fast Laps</div><div class="stat-player">${hasFastLaps?mostFastLaps[0]:'—'}</div><div class="stat-val">${hasFastLaps?mostFastLaps[1]:'—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Fewest Missed</div><div class="stat-player">${fewestMissed[0]}</div><div class="stat-val">${fewestMissed[1]}</div></div>
+    <div class="stat-card"><div class="stat-name">Best Avg / Round</div><div class="stat-player">${avgLeader[0]}</div><div class="stat-val">${avgLeader[1]}</div></div>`;
 
-  const raceLabels=races.map(r=>`R${r.round}`);
-  const datasets=PLAYERS.map((p,i)=>{ let run=0; return { label:p, data:races.map(race=>{ const s=scores.find(sc=>sc.race_id===race.id&&sc.player_name===p); run+=s?s.total_score:0; return run; }), borderColor:COLORS[i], backgroundColor:COLORS[i]+'33', tension:0.3, fill:false, pointRadius:3 }; });
+  // Chart: only rounds we have results for (evenly spaced; latest scored round on the right)
+  const raceLabels = races.map(r=>`R${r.round}`);
+  const datasets = PLAYERS.map((p,i)=>{ let run=0; return { label:p, data: races.map(race=>{ const s=scores.find(sc=>sc.race_id===race.id&&sc.player_name===p); run+=s?s.total_score:0; return run; }), borderColor:COLORS[i], backgroundColor:COLORS[i]+'33', tension:0.3, fill:false, pointRadius:3 }; });
   if(pointsChartInst) pointsChartInst.destroy();
   pointsChartInst=new Chart(document.getElementById('pointsChart'),{ type:'line', data:{labels:raceLabels,datasets}, options:{responsive:true,plugins:{legend:{labels:{color:'#ccc',font:{size:11}}}},scales:{x:{ticks:{color:'#888',font:{size:10}},grid:{color:'#2a2a3a'}},y:{ticks:{color:'#888'},grid:{color:'#2a2a3a'}}}}});
 
