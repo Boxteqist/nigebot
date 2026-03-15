@@ -178,6 +178,7 @@ const DRIVER_CODES = {
   'MAG':'Magnussen','TSU':'Tsunoda','LAW':'Lawson','ALB':'Albon',
   'BEA':'Bearman','HAD':'Hadjar','DOO':'Doohan','BOR':'Bortoleto','COL':'Colapinto'
 };
+const JOLPICA_FETCH_OPTS = { headers: { 'Accept': 'application/json' } };
 
 // Set Man Cave version label from shared version file
 (function setManCaveVersion() {
@@ -285,9 +286,9 @@ async function fetchPreview() {
 
   try {
     const [qRes, rRes, sRes] = await Promise.all([
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`),
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`),
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/sprint/`)
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`, JOLPICA_FETCH_OPTS),
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`, JOLPICA_FETCH_OPTS),
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/sprint/`, JOLPICA_FETCH_OPTS)
     ]);
     const qData = await qRes.json(), rData = await rRes.json(), sData = await sRes.json();
     const qRace = qData.MRData.RaceTable.Races[0];
@@ -302,15 +303,21 @@ async function fetchPreview() {
     const hasQual = !!qTop3, hasRace = !!rTop3;
     const hasSprint = !!sTop3;
 
+    // Fastest lap: try dedicated endpoint first, then fall back to race results (Ergast puts FastestLap on the driver's result)
     let fastestLapDriver = null;
-    if (hasRace) {
+    if (hasRace && rRace && rRace.Results) {
       try {
-        const flRes = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/fastest/1/`);
+        const flRes = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/fastest/1/`, JOLPICA_FETCH_OPTS);
         const flData = await flRes.json();
-        const fl = flData.MRData.RaceTable.Races[0]?.Results?.[0];
-        fastestLapDriver = fl ? fl.Driver.familyName : null;
+        const fl = flData.MRData?.RaceTable?.Races?.[0]?.Results?.[0];
+        fastestLapDriver = fl?.Driver?.familyName || null;
       } catch(e) {
         fastestLapDriver = null;
+      }
+      // Fallback: in race results, the driver who set fastest lap has FastestLap.rank === "1"
+      if (!fastestLapDriver) {
+        const withFl = rRace.Results.find(r => r.FastestLap && String(r.FastestLap.rank) === '1');
+        fastestLapDriver = withFl?.Driver?.familyName || null;
       }
     }
 
@@ -338,7 +345,7 @@ async function fetchPreview() {
     const flLabel = parseInt(round,10) === 1 ? '—' : (fastestLapDriver || 'Pending');
     const flEl = document.getElementById('arr_fl');
     flEl.textContent = flLabel;
-    flEl.style.color = (parseInt(round,10) > 1 && !fastestLapDriver) ? '#ffaa44' : '';
+    flEl.style.color = fastestLapDriver ? '#ffd700' : (parseInt(round,10) > 1 && !fastestLapDriver) ? '#ffaa44' : '';
 
     const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
     const raceId   = raceRows?.[0]?.id;
@@ -387,12 +394,15 @@ async function fetchPreview() {
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Race (${rScore!==null?rScore:'pending'})</div>
         ${predLine(rPreds[0],rTop3,'P1')}${predLine(rPreds[1],rTop3,'P2')}${predLine(rPreds[2],rTop3,'P3')}
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Fastest Lap (${parseInt(round,10)>1 ? (fastestLapDriver ? (flScore ? flScore+' pts' : '0 pts') : 'Pending') : 'not used'})</div>
-        <div class="pred-line ${flScore? 'exact':'miss'}"><span class="pos-label">FL</span><span class="driver">${flPred||'—'}${flScore? ' ✓':''}</span></div>
+        <div class="pred-line ${flScore? 'exact':'miss'}"><span class="pos-label">FL</span><span class="driver">${flPred||'—'}${flScore? ' ✓':' ✗'}</span></div>
       </div>`;
     }).join('');
 
+    const roundNum = parseInt(round, 10);
+    const fullResults = hasQual && hasRace && (roundNum === 1 || fastestLapDriver);
+
     const publishBtn = document.getElementById('publishBtn');
-    if (hasQual && hasRace) {
+    if (fullResults) {
       publishBtn.disabled = false;
       publishBtn.className = 'btn amber';
       publishBtn.style = '';
@@ -408,10 +418,16 @@ async function fetchPreview() {
 
     previewData = { season, round, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], sTop3: sTop3||null, hasSprint, preds, hasQual, hasRace, fastestLapDriver };
     section.classList.remove('hidden');
-    msg.className = hasQual && hasRace ? 'status-msg success' : 'status-msg info';
-    msg.textContent = hasQual && hasRace
-      ? `✅ Full results fetched for ${raceName} — ready to publish`
-      : `⏳ Qualifying available for ${raceName} — race results not yet published`;
+    if (fullResults) {
+      msg.className = 'status-msg success';
+      msg.textContent = `✅ Full results fetched for ${raceName} — ready to publish`;
+    } else if (hasQual && hasRace && roundNum > 1 && !fastestLapDriver) {
+      msg.className = 'status-msg info';
+      msg.textContent = `⏳ Qualifying and race available for ${raceName} — fastest lap still pending`;
+    } else {
+      msg.className = 'status-msg info';
+      msg.textContent = `⏳ Qualifying available for ${raceName} — race results not yet published`;
+    }
   } catch(e) {
     msg.className = 'status-msg error'; msg.textContent = `❌ ${e.message}`;
   }
@@ -485,7 +501,7 @@ const testGroups = [
     tests: [
       { name: 'API reachable', detail: 'Confirms Jolpica responds using a known historical race (2025 R1)',
         run: async () => {
-          const r = await fetch('https://api.jolpi.ca/ergast/f1/2025/1/results/');
+          const r = await fetch('https://api.jolpi.ca/ergast/f1/2025/1/results/', JOLPICA_FETCH_OPTS);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
           const race = data.MRData.RaceTable.Races[0];
@@ -497,26 +513,76 @@ const testGroups = [
           const races = await sbGet('races?order=round.asc');
           if (!races.length) throw new Error('No races in DB');
           const season = races[races.length-1].season;
-          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/`);
+          const r = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/`, JOLPICA_FETCH_OPTS);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const data = await r.json();
           const count = data.MRData.RaceTable.Races.length;
           if (!count) throw new Error('No races returned');
           return `${season}: ${count} races found`;
         }},
-      { name: 'Results available for current round', detail: 'Checks Jolpica for the most recent round with predictions',
+      { name: 'Sprint, Quali, Race & Fastest Lap — current round', detail: 'What the API has for the current round (green = in API, red = not yet). Order: Sprint, Qualifying, Race, Fastest lap.',
+        run: async () => {
+          const race = await getRaceWithPredictions();
+          const urls = [
+            `https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/qualifying/`,
+            `https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/results/`,
+            `https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/sprint/`,
+            `https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/fastest/1/`
+          ];
+          const responses = await Promise.all(urls.map(u => fetch(u, JOLPICA_FETCH_OPTS)));
+          const safeJson = async (r) => {
+            const ct = r.headers.get('content-type') || '';
+            if (!r.ok || !ct.includes('application/json')) return null;
+            try {
+              return JSON.parse(await r.text());
+            } catch (e) {
+              return null;
+            }
+          };
+          const [qData, rData, sData, flData] = await Promise.all(responses.map(r => safeJson(r)));
+          const qRace = qData?.MRData?.RaceTable?.Races?.[0];
+          const rRace = rData?.MRData?.RaceTable?.Races?.[0];
+          const sRace = sData?.MRData?.RaceTable?.Races?.[0];
+          const flFromEndpoint = flData?.MRData?.RaceTable?.Races?.[0]?.Results?.[0]?.Driver?.familyName || null;
+          const hasQual = !!qRace?.QualifyingResults?.length;
+          const hasRace = !!rRace?.Results?.length;
+          const hasSprint = !!sRace?.SprintResults?.length;
+          let flFromResults = null;
+          if (rRace?.Results) {
+            const withFl = rRace.Results.find(r => r.FastestLap && String(r.FastestLap.rank) === '1');
+            flFromResults = withFl?.Driver?.familyName || null;
+          }
+          const hasFl = !!(flFromEndpoint || flFromResults);
+          const flDriver = flFromEndpoint || flFromResults;
+          const green = '#4caf50', red = '#ff6b6b';
+          const part = (label, available, suffix = '') =>
+            `<span style="color:${available ? green : red}">${label}${suffix}</span>`;
+          const parts = [
+            part('Sprint', hasSprint),
+            part('Qualifying', hasQual),
+            part('Race', hasRace),
+            part('Fastest lap', hasFl, hasFl ? ` (${flDriver})` : '')
+          ];
+          return `${race.name} (R${race.round}) — ${parts.join(', ')}`;
+        }},
+      { name: 'Current round ready to publish', detail: 'Passes when quali and race results are in the API (so you can publish from Results tab). Uses same safe parsing as above.',
         run: async () => {
           const race = await getRaceWithPredictions();
           const [qRes, rRes] = await Promise.all([
-            fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/qualifying/`),
-            fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/results/`)
+            fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/qualifying/`, JOLPICA_FETCH_OPTS),
+            fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/results/`, JOLPICA_FETCH_OPTS)
           ]);
-          const qData = await qRes.json(), rData = await rRes.json();
-          const hasQ = !!qData.MRData.RaceTable.Races[0];
-          const hasR = !!rData.MRData.RaceTable.Races[0];
-          if (hasQ && hasR) return `${race.name}: Full results available`;
-          if (hasQ) throw new Error(`${race.name}: Qualifying available — race results pending`);
-          throw new Error(`${race.name}: No results available yet`);
+          const safeJson = async (r) => {
+            const ct = r.headers.get('content-type') || '';
+            if (!r.ok || !ct.includes('application/json')) return null;
+            try { return JSON.parse(await r.text()); } catch (e) { return null; }
+          };
+          const [qData, rData] = await Promise.all([safeJson(qRes), safeJson(rRes)]);
+          const hasQ = !!qData?.MRData?.RaceTable?.Races?.[0];
+          const hasR = !!rData?.MRData?.RaceTable?.Races?.[0];
+          if (hasQ && hasR) return `${race.name}: Quali and race in API — ready to publish`;
+          if (hasQ) throw new Error(`${race.name}: Qualifying only — race results not in API yet`);
+          throw new Error(`${race.name}: No results in API yet`);
         }},
     ]
   },
@@ -636,7 +702,10 @@ async function runAll() {
       try {
         const extra=await t.run();
         statusEl.className='test-status status-pass'; statusEl.textContent='Pass'; iconEl.textContent='✅';
-        if(extra){detailEl.textContent=`✅ ${extra}`;detailEl.style.color='#4caf50';}
+        if(extra){
+          if(typeof extra==='string'&&extra.includes('<')){detailEl.innerHTML=`✅ ${extra}`;detailEl.style.color='';}
+          else{detailEl.textContent=`✅ ${extra}`;detailEl.style.color='#4caf50';}
+        }
         passed++;
       } catch(e) {
         statusEl.className='test-status status-fail'; statusEl.textContent='Fail'; iconEl.textContent='❌';

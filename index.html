@@ -765,7 +765,7 @@ async function loadResultsForRace() {
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Fastest Lap</div>
         <div class="pred-line ${flHit ? 'exact' : 'miss'}">
           <span class="pos-label">FL</span>
-          <span class="driver">${flPred || '—'}${flHit ? ' ✓' : ''}</span>
+          <span class="driver">${flPred || '—'}${flHit ? ' ✓' : ' ✗'}</span>
         </div>
       </div>`;
     }).join('');
