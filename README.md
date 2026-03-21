@@ -21,6 +21,7 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 | `index.html` | Main NigeBot app — predictions, leaderboard, stats, scoring guide |
 | `test.html` | Man Cave — admin tools, test suite, results publishing |
 | `sql/add_nigebot_player.sql` | Backfill NigeBot’s scores (Australia) and predictions (China); run in Supabase SQL Editor |
+| `sql/remove_cancelled_2026_bahrain_saudi.sql` | Optional: delete `races` (and related rows) for cancelled 2026 Bahrain / Saudi Arabian GPs if they exist |
 
 ---
 
@@ -90,7 +91,7 @@ There is also **Crofty’s Split — Points Breakdown**, which shows, for each p
 |-----------|-----------|
 | Frontend | Vanilla HTML/CSS/JavaScript |
 | Database | Supabase (PostgreSQL) |
-| F1 Data | Jolpica API (`api.jolpi.ca/ergast/`) |
+| F1 Data | Jolpica API (`api.jolpi.ca/ergast/`) — the race dropdown for **every season, including 2026**, is loaded from this API so it stays aligned with Man Cave’s schedule checks |
 | Charts | Chart.js |
 | Hosting | GitHub Pages |
 

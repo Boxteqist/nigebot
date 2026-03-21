@@ -326,6 +326,7 @@ const SPRINT_PTS = [12.5, 9, 7.5]; // sprint race is half main race points
 const PLAYERS   = ['Ollie','Tom','Tim','Ralph','Herbie','Dave','Jason','NigeBot'];
 const COLORS    = ['#e10600','#4a9eff','#4caf50','#ffd700','#ff9800','#c084fc','#f472b6','#22c55e'];
 const hdrs = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+const JOLPICA_JSON = { headers: { Accept: 'application/json' } };
 
 const DRIVER_CODES = {
   'VER':'Verstappen','NOR':'Norris','LEC':'Leclerc','PIA':'Piastri',
@@ -335,35 +336,6 @@ const DRIVER_CODES = {
   'ALB':'Albon','SAR':'Sargeant','BOT':'Bottas','ZHO':'Zhou',
   'BEA':'Bearman','HAD':'Hadjar','DOO':'Doohan','BOR':'Bortoleto','COL':'Colapinto'
 };
-
-const CALENDAR_2026 = [
-  {round:'1',raceName:'Australian Grand Prix',date:'2026-03-15',time:'05:00:00Z',Qualifying:{date:'2026-03-14',time:'05:00:00Z'}},
-  // Chinese GP weekend is March 13–15 local (UTC+8)
-  // Sprint Sat 11:00 local => 03:00Z, Quali Sat 15:00 local => 07:00Z, Race Sun 15:00 local => 07:00Z
-  {round:'2',raceName:'Chinese Grand Prix',date:'2026-03-15',time:'07:00:00Z',Qualifying:{date:'2026-03-14',time:'07:00:00Z'},Sprint:{date:'2026-03-14',time:'03:00:00Z'}},
-  {round:'3',raceName:'Japanese Grand Prix',date:'2026-04-05',time:'05:00:00Z',Qualifying:{date:'2026-04-04',time:'05:00:00Z'}},
-  {round:'4',raceName:'Bahrain Grand Prix',date:'2026-04-19',time:'15:00:00Z',Qualifying:{date:'2026-04-18',time:'15:00:00Z'}},
-  {round:'5',raceName:'Saudi Arabian Grand Prix',date:'2026-04-26',time:'17:00:00Z',Qualifying:{date:'2026-04-25',time:'17:00:00Z'}},
-  {round:'6',raceName:'Miami Grand Prix',date:'2026-05-10',time:'19:00:00Z',Qualifying:{date:'2026-05-09',time:'19:00:00Z'},Sprint:{date:'2026-05-09',time:'23:00:00Z'}},
-  {round:'7',raceName:'Emilia Romagna Grand Prix',date:'2026-05-24',time:'13:00:00Z',Qualifying:{date:'2026-05-23',time:'13:00:00Z'}},
-  {round:'8',raceName:'Monaco Grand Prix',date:'2026-05-28',time:'13:00:00Z',Qualifying:{date:'2026-05-23',time:'13:00:00Z'}},
-  {round:'9',raceName:'Spanish Grand Prix',date:'2026-06-07',time:'13:00:00Z',Qualifying:{date:'2026-06-06',time:'13:00:00Z'}},
-  {round:'10',raceName:'Canadian Grand Prix',date:'2026-06-14',time:'18:00:00Z',Qualifying:{date:'2026-06-13',time:'18:00:00Z'},Sprint:{date:'2026-06-13',time:'22:00:00Z'}},
-  {round:'11',raceName:'Austrian Grand Prix',date:'2026-06-28',time:'13:00:00Z',Qualifying:{date:'2026-06-27',time:'13:00:00Z'}},
-  {round:'12',raceName:'British Grand Prix',date:'2026-07-05',time:'14:00:00Z',Qualifying:{date:'2026-07-04',time:'14:00:00Z'},Sprint:{date:'2026-07-04',time:'18:00:00Z'}},
-  {round:'13',raceName:'Belgian Grand Prix',date:'2026-07-26',time:'13:00:00Z',Qualifying:{date:'2026-07-25',time:'13:00:00Z'}},
-  {round:'14',raceName:'Hungarian Grand Prix',date:'2026-08-02',time:'13:00:00Z',Qualifying:{date:'2026-08-01',time:'13:00:00Z'}},
-  {round:'15',raceName:'Dutch Grand Prix',date:'2026-08-30',time:'13:00:00Z',Qualifying:{date:'2026-08-29',time:'13:00:00Z'},Sprint:{date:'2026-08-29',time:'17:00:00Z'}},
-  {round:'16',raceName:'Italian Grand Prix',date:'2026-09-06',time:'13:00:00Z',Qualifying:{date:'2026-09-05',time:'13:00:00Z'}},
-  {round:'17',raceName:'Azerbaijan Grand Prix',date:'2026-09-20',time:'11:00:00Z',Qualifying:{date:'2026-09-19',time:'11:00:00Z'}},
-  {round:'18',raceName:'Singapore Grand Prix',date:'2026-10-04',time:'12:00:00Z',Qualifying:{date:'2026-10-03',time:'12:00:00Z'},Sprint:{date:'2026-10-03',time:'16:00:00Z'}},
-  {round:'19',raceName:'United States Grand Prix',date:'2026-10-18',time:'19:00:00Z',Qualifying:{date:'2026-10-17',time:'19:00:00Z'}},
-  {round:'20',raceName:'Mexico City Grand Prix',date:'2026-10-25',time:'20:00:00Z',Qualifying:{date:'2026-10-24',time:'20:00:00Z'}},
-  {round:'21',raceName:'São Paulo Grand Prix',date:'2026-11-08',time:'17:00:00Z',Qualifying:{date:'2026-11-07',time:'17:00:00Z'}},
-  {round:'22',raceName:'Las Vegas Grand Prix',date:'2026-11-21',time:'06:00:00Z',Qualifying:{date:'2026-11-20',time:'06:00:00Z'}},
-  {round:'23',raceName:'Qatar Grand Prix',date:'2026-11-29',time:'14:00:00Z',Qualifying:{date:'2026-11-28',time:'14:00:00Z'}},
-  {round:'24',raceName:'Abu Dhabi Grand Prix',date:'2026-12-06',time:'13:00:00Z',Qualifying:{date:'2026-12-05',time:'13:00:00Z'}},
-];
 
 // Set header version label from shared version file
 const appVersionEl = document.getElementById('appVersion');
@@ -381,6 +353,7 @@ let allRaces = [];
 let pointsChartInst = null;
 let isDirty = false;
 let lockTimerId = null;
+let raceLoadGeneration = 0;
 
 async function sbGet(path) {
   const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: hdrs });
@@ -495,25 +468,33 @@ async function loadRaces() {
   const season = document.getElementById('seasonSel').value;
   const sel = document.getElementById('raceSel');
   sel.innerHTML = '<option>Loading...</option>';
-  if (season === '2026') {
-    allRaces = CALENDAR_2026;
-    sel.innerHTML = '<option value="">— select race —</option>' + allRaces.map(r =>
-      `<option value="${r.round}">${r.round}. ${r.raceName}</option>`).join('');
-    return;
-  }
   try {
-    const res = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/`);
+    const res = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/`, JOLPICA_JSON);
     const data = await res.json();
-    allRaces = data.MRData.RaceTable.Races;
+    allRaces = data.MRData.RaceTable.Races || [];
     sel.innerHTML = '<option value="">— select race —</option>' + allRaces.map(r =>
       `<option value="${r.round}">${r.round}. ${r.raceName}</option>`).join('');
   } catch(e) { sel.innerHTML = '<option>Failed to load</option>'; }
 }
 
+/** True if this round has a sprint session in Jolpica (same signal Man Cave uses via /sprint/). */
+async function jolpicaSprintRoundScheduled(season, round) {
+  try {
+    const res = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/sprint/`, JOLPICA_JSON);
+    if (!res.ok) return false;
+    const data = await res.json();
+    const races = data?.MRData?.RaceTable?.Races;
+    return Array.isArray(races) && races.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function onRaceChange() {
   if (isDirty && !confirm('You have unsaved predictions — are you sure you want to switch races?')) {
     const sel = document.getElementById('raceSel');
-    sel.value = allRaces.find(r => r.id === currentRaceId)?.round || '';
+    // allRaces from Jolpica has no `id`; currentRound is still the last loaded round until we pass this guard
+    sel.value = currentRound != null ? String(currentRound) : '';
     return;
   }
   const round = document.getElementById('raceSel').value;
@@ -522,7 +503,7 @@ async function onRaceChange() {
   const season = document.getElementById('seasonSel').value;
   const race = allRaces.find(r => r.round == round);
   if (!race) return;
-  currentIsSprintWeekend = !!race.Sprint;
+  const gen = ++raceLoadGeneration;
   currentRound = parseInt(round,10);
   raceStatus.className = 'status-msg info';
   raceStatus.textContent = '⏳ Loading race...';
@@ -531,17 +512,22 @@ async function onRaceChange() {
   const qualiTime = race.Qualifying?.time || '12:00:00Z';
   currentQualiAt = `${qualiDate}T${qualiTime}`;
   try {
+    const isSprintWeekend = (await jolpicaSprintRoundScheduled(season, round)) || !!race.Sprint;
+    if (gen !== raceLoadGeneration) return;
     const upserted = await sbUpsert('races', {
       season: parseInt(season), round: parseInt(round), name: race.raceName,
       qualifying_at: currentQualiAt,
       race_at: `${race.date}T${race.time||'12:00:00Z'}`
     });
+    if (gen !== raceLoadGeneration) return;
     currentRaceId = upserted?.[0]?.id;
     if (!currentRaceId) {
       const ex = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
+      if (gen !== raceLoadGeneration) return;
       currentRaceId = ex?.[0]?.id;
       currentQualiAt = ex?.[0]?.qualifying_at || currentQualiAt;
     }
+    currentIsSprintWeekend = isSprintWeekend;
     raceStatus.className = 'status-msg success';
     raceStatus.textContent = `✅ ${race.raceName} loaded`;
     setTimeout(() => raceStatus.classList.add('hidden'), 3000);
@@ -551,9 +537,11 @@ async function onRaceChange() {
     applyLockState();
     startLockCountdown();
     await loadExistingPredictions();
+    if (gen !== raceLoadGeneration) return;
     isDirty = false;
     document.querySelectorAll('#predGrid input').forEach(el => el.addEventListener('input', () => isDirty = true));
   } catch(e) {
+    if (gen !== raceLoadGeneration) return;
     raceStatus.className = 'status-msg error';
     raceStatus.textContent = '❌ Failed to load race.';
   }
