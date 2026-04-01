@@ -136,6 +136,94 @@ ALTER TABLE public.scores
   ADD COLUMN IF NOT EXISTS sprint_score numeric DEFAULT 0;
 ```
 
+### RLS: Current Operating Mode (Light Hardening)
+
+Current policy stance:
+
+- `players`, `published_log`, `results`, `scores`: **SELECT only** for `public`
+- `predictions`: **SELECT + INSERT + UPDATE** for `public` (so players can save picks without login)
+- `races`: **SELECT + INSERT + UPDATE** for `public` (current app upserts races client-side)
+
+This protects against most vandalism while keeping no-login gameplay.
+
+#### Race Weekend Checklist (Quick)
+
+1. Run **Verify Current RLS/Policies** query (below).
+2. Run **Enable publish writes (before publishing)** SQL.
+3. In Man Cave: fetch results, review preview, publish.
+4. Confirm NigeBot main app shows updated results/scores.
+5. Run **Re-lock after publishing** SQL.
+6. Re-run **Verify Current RLS/Policies** query to confirm temp policies are gone.
+
+#### Verify Current RLS/Policies
+
+```sql
+SELECT schemaname, tablename, rowsecurity
+FROM pg_tables
+WHERE schemaname = 'public'
+  AND tablename IN ('players','predictions','published_log','races','results','scores')
+ORDER BY tablename;
+
+SELECT tablename, policyname, cmd, roles, qual, with_check
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename IN ('players','predictions','published_log','races','results','scores')
+ORDER BY tablename, policyname;
+```
+
+#### Race-Day Publish Toggle (Temporary)
+
+Because Man Cave currently publishes from the browser, publish writes are blocked in hardened mode.  
+Use the following temporary toggle when you need to publish official results.
+
+Enable publish writes (before publishing):
+
+```sql
+CREATE POLICY results_insert_public_tmp
+ON public.results
+FOR INSERT TO public
+WITH CHECK (true);
+
+CREATE POLICY results_update_public_tmp
+ON public.results
+FOR UPDATE TO public
+USING (true)
+WITH CHECK (true);
+
+CREATE POLICY scores_insert_public_tmp
+ON public.scores
+FOR INSERT TO public
+WITH CHECK (true);
+
+CREATE POLICY scores_update_public_tmp
+ON public.scores
+FOR UPDATE TO public
+USING (true)
+WITH CHECK (true);
+
+CREATE POLICY published_log_insert_public_tmp
+ON public.published_log
+FOR INSERT TO public
+WITH CHECK (true);
+
+CREATE POLICY published_log_update_public_tmp
+ON public.published_log
+FOR UPDATE TO public
+USING (true)
+WITH CHECK (true);
+```
+
+Re-lock after publishing:
+
+```sql
+DROP POLICY IF EXISTS results_insert_public_tmp ON public.results;
+DROP POLICY IF EXISTS results_update_public_tmp ON public.results;
+DROP POLICY IF EXISTS scores_insert_public_tmp ON public.scores;
+DROP POLICY IF EXISTS scores_update_public_tmp ON public.scores;
+DROP POLICY IF EXISTS published_log_insert_public_tmp ON public.published_log;
+DROP POLICY IF EXISTS published_log_update_public_tmp ON public.published_log;
+```
+
 ---
 
 ## Man Cave Test Suite
