@@ -180,6 +180,17 @@ const DRIVER_CODES = {
 };
 const JOLPICA_FETCH_OPTS = { headers: { 'Accept': 'application/json' } };
 
+/** Jolpica/Ergast round index for a race name (canonical calendar). DB `round` can drift after calendar changes. */
+async function jolpicaRoundForRaceName(season, raceName) {
+  if (!raceName) return null;
+  const res = await fetch(`https://api.jolpi.ca/ergast/f1/${season}.json`, JOLPICA_FETCH_OPTS);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const races = data?.MRData?.RaceTable?.Races || [];
+  const hit = races.find(r => r.raceName === raceName);
+  return hit ? String(hit.round) : null;
+}
+
 // Set Man Cave version label from shared version file
 (function setManCaveVersion() {
   const el = document.getElementById('manCaveVersion');
@@ -223,9 +234,18 @@ async function sbUpsert(path, body) {
   if (path === 'published_log') url += '?on_conflict=race_id';
   const r = await fetch(url, { method: 'POST', headers: h, body: JSON.stringify(body) });
   const data = await r.json();
-  if (!r.ok) throw new Error(data.message || `HTTP ${r.status}`);
+  const rlsHint = ' Run sql/rls_predictions_public_writes.sql in the Supabase SQL editor (repo sql/).';
+  if (!r.ok) {
+    const msg = data.message || `HTTP ${r.status}`;
+    throw new Error(
+      path === 'predictions' && String(msg).includes('row-level security') ? msg + rlsHint : msg
+    );
+  }
   if (data && typeof data === 'object' && !Array.isArray(data) && data.code != null && data.message) {
-    throw new Error(data.message);
+    const msg = data.message;
+    throw new Error(
+      path === 'predictions' && String(msg).includes('row-level security') ? msg + rlsHint : msg
+    );
   }
   return data;
 }
@@ -280,31 +300,35 @@ async function loadResRounds() {
   try {
     const races = await sbGet(`races?season=eq.${season}&order=round.asc`);
     sel.innerHTML = races.length
-      ? races.map(r => `<option value="${r.round}">${r.round}. ${r.name}</option>`).join('')
+      ? races.map(r => `<option value="${r.round}" data-race-name="${encodeURIComponent(r.name)}">${r.round}. ${r.name}</option>`).join('')
       : '<option value="">No races found</option>';
   } catch(e) { sel.innerHTML = '<option value="">Failed to load</option>'; }
 }
 
 async function fetchPreview() {
   const season = document.getElementById('resSeason').value;
-  const round  = document.getElementById('resRound').value;
+  const roundSel = document.getElementById('resRound');
+  const dbRound = roundSel.value;
+  const opt = roundSel.selectedOptions[0];
+  const raceNameForApi = opt?.dataset?.raceName ? decodeURIComponent(opt.dataset.raceName) : '';
   const msg    = document.getElementById('fetchMsg');
   const section = document.getElementById('previewSection');
   section.classList.add('hidden');
   previewData = null;
-  if (!round) { msg.className='status-msg error'; msg.textContent='Select a round first.'; msg.classList.remove('hidden'); return; }
+  if (!dbRound) { msg.className='status-msg error'; msg.textContent='Select a round first.'; msg.classList.remove('hidden'); return; }
   msg.className = 'status-msg info'; msg.textContent = '⏳ Fetching from Jolpica...'; msg.classList.remove('hidden');
 
   try {
+    const apiRound = (await jolpicaRoundForRaceName(season, raceNameForApi)) || dbRound;
     const [qRes, rRes, sRes] = await Promise.all([
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/qualifying/`, JOLPICA_FETCH_OPTS),
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/results/`, JOLPICA_FETCH_OPTS),
-      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/sprint/`, JOLPICA_FETCH_OPTS)
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${apiRound}/qualifying/`, JOLPICA_FETCH_OPTS),
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${apiRound}/results/`, JOLPICA_FETCH_OPTS),
+      fetch(`https://api.jolpi.ca/ergast/f1/${season}/${apiRound}/sprint/`, JOLPICA_FETCH_OPTS)
     ]);
     const qData = await qRes.json(), rData = await rRes.json(), sData = await sRes.json();
-    const qRace = qData.MRData.RaceTable.Races[0];
-    const rRace = rData.MRData.RaceTable.Races[0];
-    const sRace = sData.MRData.RaceTable.Races[0];
+    const qRace = qData?.MRData?.RaceTable?.Races?.[0];
+    const rRace = rData?.MRData?.RaceTable?.Races?.[0];
+    const sRace = sData?.MRData?.RaceTable?.Races?.[0];
 
     if (!qRace && !rRace && !sRace) { msg.className='status-msg error'; msg.textContent='⚠️ No results available yet from Jolpica.'; return; }
 
@@ -318,7 +342,7 @@ async function fetchPreview() {
     let fastestLapDriver = null;
     if (hasRace && rRace && rRace.Results) {
       try {
-        const flRes = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${round}/fastest/1/`, JOLPICA_FETCH_OPTS);
+        const flRes = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/${apiRound}/fastest/1/`, JOLPICA_FETCH_OPTS);
         const flData = await flRes.json();
         const fl = flData.MRData?.RaceTable?.Races?.[0]?.Results?.[0];
         fastestLapDriver = fl?.Driver?.familyName || null;
@@ -353,14 +377,14 @@ async function fetchPreview() {
     }
 
     // Show fastest lap under Race column; Round 1 not used; otherwise show driver or Pending (amber)
-    const flLabel = parseInt(round,10) === 1 ? '—' : (fastestLapDriver || 'Pending');
+    const flLabel = parseInt(apiRound,10) === 1 ? '—' : (fastestLapDriver || 'Pending');
     const flEl = document.getElementById('arr_fl');
     flEl.textContent = flLabel;
-    flEl.style.color = fastestLapDriver ? '#ffd700' : (parseInt(round,10) > 1 && !fastestLapDriver) ? '#ffaa44' : '';
+    flEl.style.color = fastestLapDriver ? '#ffd700' : (parseInt(apiRound,10) > 1 && !fastestLapDriver) ? '#ffaa44' : '';
 
-    const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
+    const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${dbRound}`);
     const raceId   = raceRows?.[0]?.id;
-    const raceName = raceRows?.[0]?.name || `Round ${round}`;
+    const raceName = raceRows?.[0]?.name || `Round ${dbRound}`;
     let preds = [];
     if (raceId) preds = await sbGet(`predictions?race_id=eq.${raceId}`);
 
@@ -375,7 +399,7 @@ async function fetchPreview() {
       let sScore = hasSprint ? calcScore(sPreds, sTop3, SPRINT_PTS) : null;
       if (player === 'NigeBot') sScore = 0;
       const flPred = p ? p.fastest_lap : null;
-      const flScore = (parseInt(round,10) > 1 && hasRace && fastestLapDriver && flPred && norm(flPred) === norm(fastestLapDriver))
+      const flScore = (parseInt(apiRound,10) > 1 && hasRace && fastestLapDriver && flPred && norm(flPred) === norm(fastestLapDriver))
         ? FASTEST_LAP_PTS
         : 0;
       const total  = (qScore||0) + (rScore||0) + (sScore||0) + flScore;
@@ -404,12 +428,12 @@ async function fetchPreview() {
         ${predLine(qPreds[0],qTop3,'P1')}${predLine(qPreds[1],qTop3,'P2')}${predLine(qPreds[2],qTop3,'P3')}
         <div class="section-title" style="font-size:0.68rem;margin-top:8px">Race (${rScore!==null?rScore:'pending'})</div>
         ${predLine(rPreds[0],rTop3,'P1')}${predLine(rPreds[1],rTop3,'P2')}${predLine(rPreds[2],rTop3,'P3')}
-        <div class="section-title" style="font-size:0.68rem;margin-top:8px">Fastest Lap (${parseInt(round,10)>1 ? (fastestLapDriver ? (flScore ? flScore+' pts' : '0 pts') : 'Pending') : 'not used'})</div>
+        <div class="section-title" style="font-size:0.68rem;margin-top:8px">Fastest Lap (${parseInt(apiRound,10)>1 ? (fastestLapDriver ? (flScore ? flScore+' pts' : '0 pts') : 'Pending') : 'not used'})</div>
         <div class="pred-line ${flScore? 'exact':'miss'}"><span class="pos-label">FL</span><span class="driver">${flPred||'—'}${flScore? ' ✓':' ✗'}</span></div>
       </div>`;
     }).join('');
 
-    const roundNum = parseInt(round, 10);
+    const roundNum = parseInt(apiRound, 10);
     const fullResults = hasQual && hasRace && (roundNum === 1 || fastestLapDriver);
 
     const publishBtn = document.getElementById('publishBtn');
@@ -427,7 +451,7 @@ async function fetchPreview() {
       publishBtn.textContent = '🔒 Publish Results to NigeBot';
     }
 
-    previewData = { season, round, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], sTop3: sTop3||null, hasSprint, preds, hasQual, hasRace, fastestLapDriver };
+    previewData = { season, round: dbRound, apiRound, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], sTop3: sTop3||null, hasSprint, preds, hasQual, hasRace, fastestLapDriver };
     section.classList.remove('hidden');
     if (fullResults) {
       msg.className = 'status-msg success';
@@ -446,7 +470,8 @@ async function fetchPreview() {
 
 async function publishResults() {
   if (!previewData) return;
-  const { season, round, raceId, raceName, qTop3, rTop3, sTop3, hasSprint, preds, fastestLapDriver } = previewData;
+  const { season, round, apiRound, raceId, raceName, qTop3, rTop3, sTop3, hasSprint, preds, fastestLapDriver } = previewData;
+  const effRound = apiRound != null ? apiRound : round;
   const btn = document.getElementById('publishBtn');
   const msg = document.getElementById('publishMsg');
   btn.disabled = true;
@@ -465,7 +490,7 @@ async function publishResults() {
       sprint_p1:sTop3 ? sTop3[0] : null,
       sprint_p2:sTop3 ? sTop3[1] : null,
       sprint_p3:sTop3 ? sTop3[2] : null,
-      fastest_lap: parseInt(round,10) > 1 ? fastestLapDriver : null,
+      fastest_lap: parseInt(effRound,10) > 1 ? fastestLapDriver : null,
       fetched_at:new Date().toISOString()
     });
     const scoreRows = PLAYERS.map(player => {
@@ -478,7 +503,7 @@ async function publishResults() {
       let ss = hasSprint ? calcScore(sPreds, sTop3, SPRINT_PTS) : 0;
       if (player === 'NigeBot') ss = 0; // NigeBot receives zero sprint points
       const flPred = p ? p.fastest_lap : null;
-      const flScore = (parseInt(round,10) > 1 && fastestLapDriver && flPred && norm(flPred) === norm(fastestLapDriver))
+      const flScore = (parseInt(effRound,10) > 1 && fastestLapDriver && flPred && norm(flPred) === norm(fastestLapDriver))
         ? FASTEST_LAP_PTS
         : 0;
       return {

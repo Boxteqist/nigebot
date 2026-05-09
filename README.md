@@ -146,6 +146,8 @@ Current policy stance:
 
 This protects against most vandalism while keeping no-login gameplay.
 
+If prediction saves or Man Cave “Prediction Save & Update” tests fail with **row-level security** on `predictions`, the INSERT/UPDATE policies are missing in the live database. Run `sql/rls_predictions_public_writes.sql` in the Supabase SQL Editor, then retry.
+
 #### Race Weekend Checklist (Quick)
 
 1. Run **Verify Current RLS/Policies** query (below).
