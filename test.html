@@ -525,7 +525,12 @@ async function publishResults() {
     btn.textContent = `✅ Published — ${new Date().toLocaleString('en-GB', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}`;
     loadLastPublished();
   } catch(e) {
-    msg.className = 'status-msg error'; msg.textContent = `❌ ${e.message}`;
+    const m = String(e.message || '');
+    const publishRlsHint =
+      m.includes('row-level security') && /results|scores|published_log/i.test(m)
+        ? ' Run sql/rls_publish_writes_enable.sql in Supabase SQL Editor, publish again, then sql/rls_publish_writes_disable.sql.'
+        : '';
+    msg.className = 'status-msg error'; msg.textContent = `❌ ${m}${publishRlsHint}`;
     btn.disabled = false;
   }
 }
