@@ -22,6 +22,7 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 | `test.html` | Man Cave — admin tools, test suite, results publishing |
 | `sql/add_nigebot_player.sql` | Backfill NigeBot’s scores (Australia) and predictions (China); run in Supabase SQL Editor |
 | `sql/remove_cancelled_2026_bahrain_saudi.sql` | Optional: delete `races` (and related rows) for cancelled 2026 Bahrain / Saudi Arabian GPs if they exist |
+| `sql/fix_2026_race_names.sql` | Optional: correct `races.name` for 2026 R1–R6 if Man Cave shows the wrong GP at a round (e.g. Miami at R6 instead of Monaco) |
 
 ---
 
