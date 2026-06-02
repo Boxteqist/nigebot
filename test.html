@@ -73,6 +73,8 @@
   .publish-row { display: flex; align-items: center; gap: 16px; margin-top: 16px; flex-wrap: wrap; }
   .last-published { font-size: 0.78rem; color: #888; }
   .last-published span { color: #4a9eff; }
+  .field-hint { font-size: 0.78rem; color: #888; margin: 0 0 12px; line-height: 1.45; }
+  #claudePreview { margin-top: 12px; min-height: 140px; font-size: 0.8rem; }
 </style>
 </head>
 <body>
@@ -119,6 +121,28 @@
       <button class="btn" onclick="fetchPreview()">🔄 Fetch Results</button>
     </div>
     <div id="fetchMsg" class="status-msg info hidden"></div>
+  </div>
+
+  <div class="card" id="claudeCard">
+    <h2>WhatsApp via Claude</h2>
+    <p class="field-hint">Build a block to paste into Claude — ask it to write a witty Park Estate group message. Use <strong>Race results</strong> after Fetch; use <strong>Reminder</strong> or <strong>Other</strong> for predictions nudges, birthdays, etc.</p>
+    <div class="config-row">
+      <div>
+        <label class="field-label">Message type</label>
+        <select id="claudeMsgType">
+          <option value="race_results">Race results (needs Fetch first)</option>
+          <option value="predictions_reminder">Predictions reminder</option>
+          <option value="other">Other / ad-hoc</option>
+        </select>
+      </div>
+    </div>
+    <label class="field-label">Your notes (optional)</label>
+    <textarea id="claudeNotes" rows="2" placeholder="e.g. Quali locks Saturday 2pm UK. Or: mention Ralph's birthday."></textarea>
+    <div class="publish-row">
+      <button type="button" class="btn grey" onclick="copyForClaude()">📋 Copy for Claude</button>
+      <span class="last-published" id="claudeCopyStatus"></span>
+    </div>
+    <textarea id="claudePreview" rows="14" readonly placeholder="Click “Copy for Claude” — preview appears here (also copied to clipboard)."></textarea>
   </div>
 
   <div id="previewSection" class="hidden">
@@ -476,7 +500,17 @@ async function fetchPreview() {
       publishBtn.textContent = '🔒 Publish Results to NigeBot';
     }
 
-    previewData = { season, round: dbRound, apiRound, raceId, raceName, qTop3:qTop3||[], rTop3:rTop3||[], sTop3: sTop3||null, hasSprint, preds, hasQual, hasRace, fastestLapDriver };
+    previewData = {
+      season, round: dbRound, apiRound, raceId, raceName,
+      qTop3: qTop3 || [], rTop3: rTop3 || [], sTop3: sTop3 || null,
+      hasSprint, hasQual, hasRace, fastestLapDriver,
+      playerScores: playerScores.map(ps => ({
+        player: ps.player,
+        qPreds: ps.qPreds, rPreds: ps.rPreds, sPreds: ps.sPreds,
+        qScore: ps.qScore, rScore: ps.rScore, sScore: ps.sScore,
+        flPred: ps.flPred, flScore: ps.flScore, total: ps.total
+      }))
+    };
     section.classList.remove('hidden');
     if (fullResults) {
       msg.className = 'status-msg success';
@@ -490,6 +524,217 @@ async function fetchPreview() {
     }
   } catch(e) {
     msg.className = 'status-msg error'; msg.textContent = `❌ ${e.message}`;
+  }
+}
+
+const CLAUDE_INSTRUCTIONS = {
+  race_results: `Write a short, witty WhatsApp message for our Park Estate F1 predictions group (NigeBot).
+Tone: friendly banter, Crofty / F1 commentary vibes — not cringe. About 8–14 lines. Emoji sparingly.
+Use the facts below only; do not invent scores or results.`,
+  predictions_reminder: `Write a short, friendly WhatsApp reminder for our Park Estate F1 predictions group (NigeBot).
+Ask people to submit predictions before the lock. Include the app link. Tone: warm, light humour. About 4–8 lines. Emoji sparingly.`,
+  other: `Write a short WhatsApp message for our Park Estate F1 predictions group (NigeBot).
+Use the notes and context below. Tone: friendly group chat. About 4–12 lines. Emoji sparingly.`
+};
+
+function driverLabel(code) {
+  if (!code) return '—';
+  const up = String(code).trim().toUpperCase();
+  const full = DRIVER_CODES[up];
+  return full ? `${up} (${full})` : up;
+}
+
+function predSummaryLine(pred, actual, label) {
+  if (!actual || !actual[0]) return `    ${label}: ${pred || '—'} (not available yet)`;
+  if (!pred) return `    ${label}: —`;
+  const ni = actual.findIndex(r => norm(r) === norm(pred));
+  const pi = ['P1', 'P2', 'P3'].indexOf(label);
+  if (ni === pi) return `    ${label}: ${driverLabel(pred)} — exact ✓`;
+  if (ni !== -1 && Math.abs(ni - pi) === 1) return `    ${label}: ${driverLabel(pred)} — close (~) actual ${driverLabel(actual[ni])}`;
+  return `    ${label}: ${driverLabel(pred)} — miss ✗`;
+}
+
+function getSelectedRaceLabel() {
+  const opt = document.getElementById('resRound').selectedOptions[0];
+  return opt?.textContent?.trim() || '';
+}
+
+async function fetchSeasonStandings(season, maxRound) {
+  const allRaces = await sbGet(`races?season=eq.${season}&order=round.asc`);
+  const scoredRaces = allRaces.filter(r => parseInt(r.round, 10) <= parseInt(maxRound, 10));
+  if (!scoredRaces.length) return [];
+  const ids = scoredRaces.map(r => r.id).join(',');
+  const scores = await sbGet(`scores?race_id=in.(${ids})`);
+  const totals = {};
+  PLAYERS.forEach(p => { totals[p] = 0; });
+  scores.forEach(s => {
+    if (totals[s.player_name] != null) totals[s.player_name] += s.total_score;
+  });
+  return Object.entries(totals).sort((a, b) => b[1] - a[1]);
+}
+
+function buildRaceHighlights(d) {
+  const lines = [];
+  const top = d.playerScores[0];
+  const bottom = d.playerScores[d.playerScores.length - 1];
+  if (top) lines.push(`Round winner: ${top.player} (${top.total} pts)`);
+  if (bottom && bottom.player !== top?.player) {
+    lines.push(`Round last: ${bottom.player} (${bottom.total} pts)`);
+  }
+  const poleHits = d.playerScores.filter(ps => ps.qPreds[0] && d.qTop3[0] && norm(ps.qPreds[0]) === norm(d.qTop3[0]));
+  if (poleHits.length) lines.push(`Called pole (${driverLabel(d.qTop3[0])}): ${poleHits.map(p => p.player).join(', ')}`);
+  const winHits = d.playerScores.filter(ps => ps.rPreds[0] && d.rTop3[0] && norm(ps.rPreds[0]) === norm(d.rTop3[0]));
+  if (winHits.length) lines.push(`Called race winner (${driverLabel(d.rTop3[0])}): ${winHits.map(p => p.player).join(', ')}`);
+  if (parseInt(d.apiRound, 10) > 1 && d.fastestLapDriver) {
+    const flHits = d.playerScores.filter(ps => ps.flPred && norm(ps.flPred) === norm(d.fastestLapDriver));
+    if (flHits.length) lines.push(`Called fastest lap (${driverLabel(d.fastestLapDriver)}): ${flHits.map(p => p.player).join(', ')}`);
+  }
+  return lines;
+}
+
+async function buildRaceResultsClaudeText(notes) {
+  const d = previewData;
+  if (!d?.playerScores?.length) {
+    throw new Error('Fetch results for this round first (Race results needs score preview).');
+  }
+  const roundNum = d.apiRound != null ? d.apiRound : d.round;
+  const lines = [
+    '=== NigeBot → Claude (paste below) ===',
+    '',
+    'TASK:',
+    CLAUDE_INSTRUCTIONS.race_results,
+    ''
+  ];
+  if (notes) {
+    lines.push('ADMIN_NOTES:', notes, '');
+  }
+  lines.push(
+    '--- RACE ---',
+    `Event: ${d.raceName} (${d.season} Round ${roundNum})`,
+    `Sprint weekend: ${d.hasSprint ? 'yes' : 'no'}`,
+    ''
+  );
+  if (d.hasSprint && d.sTop3) {
+    lines.push(
+      'Actual sprint:',
+      `  P1 ${driverLabel(d.sTop3[0])}, P2 ${driverLabel(d.sTop3[1])}, P3 ${driverLabel(d.sTop3[2])}`,
+      ''
+    );
+  }
+  lines.push(
+    'Actual qualifying:',
+    `  P1 ${driverLabel(d.qTop3[0])}, P2 ${driverLabel(d.qTop3[1])}, P3 ${driverLabel(d.qTop3[2])}`,
+    '',
+    'Actual race:',
+    `  P1 ${driverLabel(d.rTop3[0])}, P2 ${driverLabel(d.rTop3[1])}, P3 ${driverLabel(d.rTop3[2])}`,
+    ''
+  );
+  if (parseInt(roundNum, 10) > 1) {
+    lines.push(`Fastest lap: ${d.fastestLapDriver ? driverLabel(d.fastestLapDriver) : 'pending'}`, '');
+  }
+  lines.push('--- ROUND SCORES (high → low) ---');
+  d.playerScores.forEach((ps, i) => {
+    lines.push(
+      `${i + 1}. ${ps.player} — ${ps.total} pts (Q ${ps.qScore ?? 0}, S ${ps.sScore ?? 0}, R ${ps.rScore ?? 0}, FL ${ps.flScore ?? 0})`
+    );
+    if (d.hasSprint && d.sTop3) {
+      lines.push(predSummaryLine(ps.sPreds[0], d.sTop3, 'P1'));
+      lines.push(predSummaryLine(ps.sPreds[1], d.sTop3, 'P2'));
+      lines.push(predSummaryLine(ps.sPreds[2], d.sTop3, 'P3'));
+    }
+    lines.push(predSummaryLine(ps.qPreds[0], d.qTop3, 'P1'));
+    lines.push(predSummaryLine(ps.qPreds[1], d.qTop3, 'P2'));
+    lines.push(predSummaryLine(ps.qPreds[2], d.qTop3, 'P3'));
+    lines.push(predSummaryLine(ps.rPreds[0], d.rTop3, 'P1'));
+    lines.push(predSummaryLine(ps.rPreds[1], d.rTop3, 'P2'));
+    lines.push(predSummaryLine(ps.rPreds[2], d.rTop3, 'P3'));
+    if (parseInt(roundNum, 10) > 1) {
+      const flOk = d.fastestLapDriver && ps.flPred && norm(ps.flPred) === norm(d.fastestLapDriver);
+      lines.push(`    FL: ${driverLabel(ps.flPred)}${flOk ? ' — exact ✓' : ' — miss ✗'}`);
+    }
+    lines.push('');
+  });
+  const highlights = buildRaceHighlights(d);
+  if (highlights.length) {
+    lines.push('--- BANTER HOOKS ---', ...highlights.map(h => `• ${h}`), '');
+  }
+  try {
+    const seasonBoard = await fetchSeasonStandings(d.season, roundNum);
+    if (seasonBoard.length) {
+      lines.push('--- SEASON STANDINGS (after this round) ---');
+      seasonBoard.forEach(([name, pts], i) => lines.push(`${i + 1}. ${name} — ${pts}`));
+      lines.push('');
+    }
+  } catch (e) { /* optional */ }
+  lines.push('App: https://boxteqist.github.io/nigebot');
+  return lines.join('\n');
+}
+
+function buildReminderClaudeText(notes) {
+  const season = document.getElementById('resSeason').value;
+  const raceLabel = getSelectedRaceLabel();
+  const lines = [
+    '=== NigeBot → Claude (paste below) ===',
+    '',
+    'TASK:',
+    CLAUDE_INSTRUCTIONS.predictions_reminder,
+    ''
+  ];
+  if (notes) lines.push('ADMIN_NOTES:', notes, '');
+  lines.push(
+    '--- CONTEXT ---',
+    `Season: ${season}`,
+    raceLabel ? `Upcoming / selected round: ${raceLabel}` : 'Upcoming round: (pick a round in the dropdown above, or say in notes)',
+    `Players: ${PLAYERS.filter(p => p !== 'NigeBot').join(', ')} (plus NigeBot in the game)`,
+    'App: https://boxteqist.github.io/nigebot',
+    'Predictions lock when qualifying starts (shown in the app).'
+  );
+  return lines.join('\n');
+}
+
+function buildOtherClaudeText(notes) {
+  const season = document.getElementById('resSeason').value;
+  const raceLabel = getSelectedRaceLabel();
+  const lines = [
+    '=== NigeBot → Claude (paste below) ===',
+    '',
+    'TASK:',
+    CLAUDE_INSTRUCTIONS.other,
+    ''
+  ];
+  if (notes) {
+    lines.push('ADMIN_NOTES:', notes, '');
+  } else {
+    lines.push('ADMIN_NOTES: (add your occasion or message angle above, then copy again)', '');
+  }
+  lines.push(
+    '--- CONTEXT ---',
+    `Season: ${season}`,
+    raceLabel ? `Selected round in Man Cave: ${raceLabel}` : '',
+    `Players: ${PLAYERS.join(', ')}`,
+    'App: https://boxteqist.github.io/nigebot'
+  );
+  return lines.filter(Boolean).join('\n');
+}
+
+async function copyForClaude() {
+  const type = document.getElementById('claudeMsgType').value;
+  const notes = document.getElementById('claudeNotes').value.trim();
+  const status = document.getElementById('claudeCopyStatus');
+  const preview = document.getElementById('claudePreview');
+  try {
+    let text;
+    if (type === 'race_results') text = await buildRaceResultsClaudeText(notes);
+    else if (type === 'predictions_reminder') text = buildReminderClaudeText(notes);
+    else text = buildOtherClaudeText(notes);
+    preview.value = text;
+    await navigator.clipboard.writeText(text);
+    status.innerHTML = 'Copied — <span>paste into Claude</span>';
+    setTimeout(() => { status.textContent = ''; }, 5000);
+  } catch (e) {
+    status.textContent = '';
+    preview.value = '';
+    alert(e.message || String(e));
   }
 }
 

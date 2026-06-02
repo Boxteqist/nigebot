@@ -42,6 +42,7 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 4. Hit **Fetch Results** and review the score preview for all players (sorted highest to lowest)
 5. When ready, the **Publish Results to NigeBot** button turns amber — hit it to push scores live
 6. Button turns green with a timestamp once published — "Last published" also updates with race name and time
+7. **WhatsApp via Claude** — choose message type, add optional notes (birthday, lock time, etc.), click **Copy for Claude**, paste into Claude and ask for the group message. For race weekends, **Fetch** first so results/scores are included.
 
 ---
 
