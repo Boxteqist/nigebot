@@ -19,10 +19,14 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 | File | Description |
 |------|-------------|
 | `index.html` | Main NigeBot app — predictions, leaderboard, stats, scoring guide |
-| `test.html` | Man Cave — admin tools, test suite, results publishing |
+| `test.html` | Man Cave — admin tools, test suite, results publishing, **Copy for Claude** |
+| `sql/rls_publish_writes_enable.sql` | Run in Supabase **before** publishing from Man Cave (temporary write access) |
+| `sql/rls_publish_writes_disable.sql` | Run in Supabase **after** publishing to re-lock `results`, `scores`, `published_log` |
+| `sql/rls_predictions_public_writes.sql` | Run if prediction saves fail with RLS errors |
 | `sql/add_nigebot_player.sql` | Backfill NigeBot’s scores (Australia) and predictions (China); run in Supabase SQL Editor |
 | `sql/remove_cancelled_2026_bahrain_saudi.sql` | Optional: delete `races` (and related rows) for cancelled 2026 Bahrain / Saudi Arabian GPs if they exist |
 | `sql/fix_2026_race_names.sql` | Optional: correct `races.name` for 2026 R1–R6 if Man Cave shows the wrong GP at a round (e.g. Miami at R6 instead of Monaco) |
+| `.github/workflows/supabase-heartbeat.yml` | Daily ping so the Free-tier Supabase project is not paused for inactivity |
 
 ---
 
@@ -42,7 +46,7 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 4. Hit **Fetch Results** and review the score preview for all players (sorted highest to lowest)
 5. When ready, the **Publish Results to NigeBot** button turns amber — hit it to push scores live
 6. Button turns green with a timestamp once published — "Last published" also updates with race name and time
-7. **WhatsApp via Claude** — choose message type, add optional notes (birthday, lock time, etc.), click **Copy for Claude**, paste into Claude and ask for the group message. For race weekends, **Fetch** first so results/scores are included.
+7. **WhatsApp via Claude** — **Fetch** first for race weekends, then **Copy for Claude**. You get high-level facts (podiums, round + season scores, talking points, app URL) to paste into Claude — not full prediction grids. Optional notes for reminders, birthdays, etc.
 
 ---
 
@@ -155,11 +159,12 @@ Publishing from Man Cave writes **`results`**, **`scores`**, and **`published_lo
 #### Race Weekend Checklist (Quick)
 
 1. Run **Verify Current RLS/Policies** query (below).
-2. Run **Enable publish writes (before publishing)** SQL.
-3. In Man Cave: fetch results, review preview, publish.
+2. Run **`sql/rls_publish_writes_enable.sql`** in the Supabase SQL Editor.
+3. In Man Cave: **Fetch** → review preview → **Publish**.
 4. Confirm NigeBot main app shows updated results/scores.
-5. Run **Re-lock after publishing** SQL.
-6. Re-run **Verify Current RLS/Policies** query to confirm temp policies are gone.
+5. **Copy for Claude** (optional) → paste into Claude for the WhatsApp post; link to the app, not full grids.
+6. Run **`sql/rls_publish_writes_disable.sql`** to re-lock (or paste the **Re-lock after publishing** block below).
+7. Re-run **Verify Current RLS/Policies** — confirm no `*_public_tmp` policies remain on `results`, `scores`, or `published_log`.
 
 #### Verify Current RLS/Policies
 
@@ -219,7 +224,7 @@ USING (true)
 WITH CHECK (true);
 ```
 
-Re-lock after publishing:
+Re-lock after publishing (same as `sql/rls_publish_writes_disable.sql`):
 
 ```sql
 DROP POLICY IF EXISTS results_insert_public_tmp ON public.results;
