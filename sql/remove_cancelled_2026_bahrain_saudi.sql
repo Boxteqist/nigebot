@@ -4,6 +4,7 @@
 -- Note: Jolpica’s 2026 calendar was revised (22 rounds, different order/dates than the old hardcoded list).
 -- Opening a weekend in Enter Predictions upserts `races` from the API. Orphan rows from the old numbering may
 -- still appear in Man Cave’s round list until removed or superseded.
+-- If a round shows the wrong GP name (e.g. Miami at R6), also run sql/fix_2026_race_names.sql.
 
 DELETE FROM public.published_log
 WHERE race_id IN (

@@ -106,7 +106,7 @@
     <div class="config-row">
       <div>
         <label class="field-label">Season</label>
-        <select id="resSeason">
+        <select id="resSeason" onchange="loadResRounds()">
           <option value="2026">2026</option>
           <option value="2027">2027</option>
           <option value="2028">2028</option>
@@ -180,13 +180,19 @@ const DRIVER_CODES = {
 };
 const JOLPICA_FETCH_OPTS = { headers: { 'Accept': 'application/json' } };
 
-/** Jolpica/Ergast round index for a race name (canonical calendar). DB `round` can drift after calendar changes. */
-async function jolpicaRoundForRaceName(season, raceName) {
-  if (!raceName) return null;
+/** Full season calendar from Jolpica (canonical names and round numbers). */
+async function jolpicaSeasonRaces(season) {
   const res = await fetch(`https://api.jolpi.ca/ergast/f1/${season}.json`, JOLPICA_FETCH_OPTS);
   if (!res.ok) return null;
   const data = await res.json();
-  const races = data?.MRData?.RaceTable?.Races || [];
+  return data?.MRData?.RaceTable?.Races || [];
+}
+
+/** Jolpica/Ergast round index for a race name. DB `round` + `name` can drift after calendar changes. */
+async function jolpicaRoundForRaceName(season, raceName) {
+  if (!raceName) return null;
+  const races = await jolpicaSeasonRaces(season);
+  if (!races) return null;
   const hit = races.find(r => r.raceName === raceName);
   return hit ? String(hit.round) : null;
 }
@@ -298,10 +304,28 @@ async function loadResRounds() {
   const sel = document.getElementById('resRound');
   sel.innerHTML = '<option value="">— loading —</option>';
   try {
-    const races = await sbGet(`races?season=eq.${season}&order=round.asc`);
-    sel.innerHTML = races.length
-      ? races.map(r => `<option value="${r.round}" data-race-name="${encodeURIComponent(r.name)}">${r.round}. ${r.name}</option>`).join('')
-      : '<option value="">No races found</option>';
+    const [jolpicaRaces, dbRaces] = await Promise.all([
+      jolpicaSeasonRaces(season),
+      sbGet(`races?season=eq.${season}&order=round.asc`)
+    ]);
+    if (!dbRaces.length) {
+      sel.innerHTML = '<option value="">No races in DB yet — open a weekend in NigeBot first</option>';
+      return;
+    }
+    const jolpicaByRound = Object.fromEntries(
+      (jolpicaRaces || []).map(r => [String(r.round), r])
+    );
+    sel.innerHTML = dbRaces.map(db => {
+      const jr = jolpicaByRound[String(db.round)];
+      const labelName = jr?.raceName || db.name;
+      const apiRound = jr ? String(jr.round) : String(db.round);
+      if (jr && jr.raceName !== db.name) {
+        console.warn(
+          `Round ${db.round}: DB name "${db.name}" differs from Jolpica "${jr.raceName}" — using Jolpica for fetch/publish`
+        );
+      }
+      return `<option value="${db.round}" data-race-id="${db.id}" data-api-round="${apiRound}" data-race-name="${encodeURIComponent(labelName)}">${db.round}. ${labelName}</option>`;
+    }).join('');
   } catch(e) { sel.innerHTML = '<option value="">Failed to load</option>'; }
 }
 
@@ -311,6 +335,8 @@ async function fetchPreview() {
   const dbRound = roundSel.value;
   const opt = roundSel.selectedOptions[0];
   const raceNameForApi = opt?.dataset?.raceName ? decodeURIComponent(opt.dataset.raceName) : '';
+  const raceIdFromOpt = opt?.dataset?.raceId || '';
+  const apiRoundFromOpt = opt?.dataset?.apiRound || '';
   const msg    = document.getElementById('fetchMsg');
   const section = document.getElementById('previewSection');
   section.classList.add('hidden');
@@ -319,7 +345,7 @@ async function fetchPreview() {
   msg.className = 'status-msg info'; msg.textContent = '⏳ Fetching from Jolpica...'; msg.classList.remove('hidden');
 
   try {
-    const apiRound = (await jolpicaRoundForRaceName(season, raceNameForApi)) || dbRound;
+    const apiRound = apiRoundFromOpt || (await jolpicaRoundForRaceName(season, raceNameForApi)) || dbRound;
     const [qRes, rRes, sRes] = await Promise.all([
       fetch(`https://api.jolpi.ca/ergast/f1/${season}/${apiRound}/qualifying/`, JOLPICA_FETCH_OPTS),
       fetch(`https://api.jolpi.ca/ergast/f1/${season}/${apiRound}/results/`, JOLPICA_FETCH_OPTS),
@@ -382,9 +408,8 @@ async function fetchPreview() {
     flEl.textContent = flLabel;
     flEl.style.color = fastestLapDriver ? '#ffd700' : (parseInt(apiRound,10) > 1 && !fastestLapDriver) ? '#ffaa44' : '';
 
-    const raceRows = await sbGet(`races?season=eq.${season}&round=eq.${dbRound}`);
-    const raceId   = raceRows?.[0]?.id;
-    const raceName = raceRows?.[0]?.name || `Round ${dbRound}`;
+    const raceId = raceIdFromOpt || (await sbGet(`races?season=eq.${season}&round=eq.${dbRound}`))?.[0]?.id;
+    const raceName = raceNameForApi || `Round ${dbRound}`;
     let preds = [];
     if (raceId) preds = await sbGet(`predictions?race_id=eq.${raceId}`);
 

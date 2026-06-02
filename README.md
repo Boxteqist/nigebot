@@ -248,6 +248,19 @@ The score preview in the Results tab shows all eight players sorted by score, hi
 - `~` amber — one position off (half points)
 - `✗` grey — miss or driver not in top 3
 
+## Supabase Free plan — “project will be paused” emails
+
+Supabase is **not** complaining that you use too little database storage. On the **Free** plan, projects are **paused after about 7 days of inactivity** so shared infrastructure isn’t kept warm for unused apps. That’s the opposite of “we want you to use more data” — it’s **“we want some sign the project is still in use.”**
+
+**What counts as activity:** REST/API requests that reach Postgres (reads or writes). Opening the static GitHub Pages site alone does **not** count unless the page actually calls Supabase (predictions save, load races, publish, etc.). Quiet weeks between race weekends can trigger the warning email.
+
+**When paused:** Data is usually still on disk; restore from the [Supabase dashboard](https://supabase.com/dashboard). Free projects can be restored for **90 days** after pause (see [Supabase changelog](https://supabase.com/changelog/27497-paused-free-plan-projects-are-restorable-for-90-days)). **Pro** ($25/mo) projects are not paused for inactivity.
+
+**What we do in this repo:** GitHub Actions workflow [`.github/workflows/supabase-heartbeat.yml`](.github/workflows/supabase-heartbeat.yml) runs **daily** and runs a simple `GET` on the `races` table. That resets the inactivity timer. You can also run it manually under **Actions → Supabase heartbeat → Run workflow**. After merging to `main`, enable Actions on the repo if needed.
+
+**Other options:** A free [cron-job.org](https://cron-job.org) or UptimeRobot monitor hitting  
+`https://qkmukcuqosvlumsrqyay.supabase.co/rest/v1/races?select=id&limit=1` with the same `apikey` / `Authorization` headers as the app. No need for a dedicated “heartbeat” table unless you want an audit log.
+
 ## Publish Button States
 
 | State | Colour | Meaning |

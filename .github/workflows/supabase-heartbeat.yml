@@ -1,0 +1,27 @@
+# Keep the Supabase Free plan project from pausing due to inactivity.
+# Free projects pause after ~7 days with no API/database activity (see README).
+# NigeBot on GitHub Pages is static — it only hits Supabase when someone uses the app.
+name: Supabase heartbeat
+
+on:
+  schedule:
+    # Daily 09:00 UTC (well inside the 7-day inactivity window)
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read database (counts as activity)
+        run: |
+          set -euo pipefail
+          # Publishable anon key — same as index.html (client-safe, RLS-protected)
+          SB_URL='https://qkmukcuqosvlumsrqyay.supabase.co'
+          SB_KEY='sb_publishable_dkJN0bxvkkW7JHXAvZ62XQ_tpxexARU'
+          curl -sf "${SB_URL}/rest/v1/races?select=id&limit=1" \
+            -H "apikey: ${SB_KEY}" \
+            -H "Authorization: Bearer ${SB_KEY}" \
+            -H "Accept: application/json"
+          echo ""
+          echo "Supabase heartbeat OK at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
