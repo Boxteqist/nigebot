@@ -323,6 +323,8 @@ const SB_URL  = 'https://qkmukcuqosvlumsrqyay.supabase.co';
 const SB_KEY  = 'sb_publishable_dkJN0bxvkkW7JHXAvZ62XQ_tpxexARU';
 const QUALI_PTS = [12.5, 9, 7.5];
 const RACE_PTS  = [25, 18, 15];
+const QUALI_MAX = QUALI_PTS.reduce((a, b) => a + b, 0);
+const RACE_MAX  = RACE_PTS.reduce((a, b) => a + b, 0);
 const SPRINT_PTS = [12.5, 9, 7.5]; // sprint race is half main race points
 const PLAYERS   = ['Ollie','Tom','Tim','Ralph','Herbie','Dave','Jason','NigeBot'];
 const COLORS    = ['#e10600','#4a9eff','#4caf50','#ffd700','#ff9800','#c084fc','#f472b6','#22c55e'];
@@ -788,9 +790,21 @@ function statPlayerClass(names) {
   return names.length > 1 ? 'stat-player stat-player--multi' : 'stat-player';
 }
 
+async function jolpicaSeasonRoundCount(season) {
+  try {
+    const res = await fetch(`https://api.jolpi.ca/ergast/f1/${season}/`, JOLPICA_JSON);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.MRData?.RaceTable?.Races?.length || null;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function loadSeason() {
   const season = document.getElementById('seasonSel').value;
   const allSeasonRaces = await sbGet(`races?season=eq.${season}&order=round.asc`);
+  const seasonRoundCount = (await jolpicaSeasonRoundCount(season)) || allSeasonRaces.length;
   if (!allSeasonRaces.length) {
     document.getElementById('leaderboard').innerHTML='<p style="color:#888;font-size:0.85rem;">No data yet.</p>';
     document.getElementById('keyStats').innerHTML='';
@@ -857,12 +871,18 @@ async function loadSeason() {
   const leader = topBy(totFlat, true);
   const uniqueTotals = [...new Set(sortedTotals.map(([, t]) => t))].sort((a, b) => b - a);
   const runnerUpVal = uniqueTotals.length >= 2 ? uniqueTotals[1] : null;
-  const runnerUp = runnerUpVal != null
-    ? { names: sortedTotals.filter(([, t]) => t === runnerUpVal).map(([n]) => n).sort(), value: runnerUpVal }
-    : { names: [], value: 0 };
   const leadOver2nd = leader.value > 0 && runnerUpVal != null
     ? uniqueTotals[0] - runnerUpVal
     : null;
+
+  const cleanSweepTotal = {};
+  PLAYERS.forEach(p => { cleanSweepTotal[p] = 0; });
+  scores.forEach(s => {
+    if (s.quali_score >= QUALI_MAX) cleanSweepTotal[s.player_name]++;
+    if (s.race_score >= RACE_MAX) cleanSweepTotal[s.player_name]++;
+  });
+  const cleanSweeps = topBy(cleanSweepTotal, true);
+  const hasCleanSweeps = cleanSweeps.value > 0;
 
   const avgByPlayer = {};
   PLAYERS.forEach(p => {
@@ -904,13 +924,12 @@ async function loadSeason() {
   const hasWins = mostWins.value > 0;
   const hasFastLaps = mostFastLaps.value > 0;
   const hasSprints = sprintSpecialist.value > 0;
-  const seasonRoundCount = allSeasonRaces.length;
 
   document.getElementById('keyStats').innerHTML = `
     <div class="stat-card"><div class="stat-name">Current Leader</div><div class="${statPlayerClass(leader.names)}">${hasScores?formatPlayers(leader.names):'—'}</div><div class="stat-val">${hasScores?leader.value+' pts':'No data yet'}</div></div>
     <div class="stat-card"><div class="stat-name">Rounds Scored</div><div class="stat-player">&nbsp;</div><div class="stat-val">${races.length} <span class="stat-val--muted">/ ${seasonRoundCount}</span></div></div>
-    <div class="stat-card"><div class="stat-name">Lead over 2nd</div><div class="stat-player">${leadOver2nd != null ? formatPlayers(runnerUp.names) : '—'}</div><div class="stat-val">${leadOver2nd != null ? (leadOver2nd === 0 ? 'Tied' : '+'+leadOver2nd+' pts') : '—'}</div></div>
-    <div class="stat-card"><div class="stat-name">Runner-up</div><div class="${statPlayerClass(runnerUp.names)}">${runnerUp.names.length?formatPlayers(runnerUp.names):'—'}</div><div class="stat-val">${runnerUp.names.length?runnerUp.value+' pts':'—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Lead over 2nd</div><div class="${statPlayerClass(leader.names)}">${hasScores && leadOver2nd != null ? formatPlayers(leader.names) : '—'}</div><div class="stat-val">${leadOver2nd != null ? (leadOver2nd === 0 ? 'Tied at top' : '+'+leadOver2nd+' pts') : '—'}</div></div>
+    <div class="stat-card" title="Perfect quali top 3 or perfect race top 3 in a round"><div class="stat-name">Clean Sweeps</div><div class="${statPlayerClass(cleanSweeps.names)}">${hasCleanSweeps?formatPlayers(cleanSweeps.names):'—'}</div><div class="stat-val">${hasCleanSweeps?cleanSweeps.value:'—'}</div></div>
     <div class="stat-card"><div class="stat-name">Best Single Round</div><div class="${statPlayerClass(bestRound.names)}">${bestRound.value?formatPlayers(bestRound.names):'—'}</div><div class="stat-val">${bestRound.value||'—'}</div></div>
     <div class="stat-card"><div class="stat-name">Best Avg / Round</div><div class="${statPlayerClass(avgLeader.names)}">${avgLeader.names.length?formatPlayers(avgLeader.names):'—'}</div><div class="stat-val">${avgLeader.names.length?avgLeader.value:'—'}</div></div>
     <div class="stat-card"><div class="stat-name">Fewest Missed</div><div class="${statPlayerClass(fewestMissed.names)}">${formatPlayers(fewestMissed.names)}</div><div class="stat-val">${fewestMissed.names.length?fewestMissed.value:'—'}</div></div>
