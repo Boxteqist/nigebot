@@ -86,6 +86,7 @@
   .stat-card { background: #0f0f13; border: 1px solid #2a2a3a; border-radius: 10px; padding: 14px; text-align: center; }
   .stat-card .stat-name { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
   .stat-card .stat-player { font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 4px; }
+  .stat-card .stat-player.stat-player--multi { font-size: 0.78rem; line-height: 1.35; }
   .stat-card .stat-val { font-size: 1.35rem; font-weight: 800; color: #e10600; }
   .stat-card .stat-val .stat-val--muted { font-size: 1rem; font-weight: 600; color: #666; }
   .award-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
@@ -767,6 +768,26 @@ async function loadResultsForRace() {
 }
 
 // ---- SEASON TAB ----
+function formatPlayers(names) {
+  if (!names?.length) return '—';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return names.join(' & ');
+  return names.slice(0, -1).join(', ') + ' & ' + names[names.length - 1];
+}
+
+function topBy(obj, preferHigh = true) {
+  const entries = Object.entries(obj);
+  if (!entries.length) return { names: [], value: 0 };
+  entries.sort((a, b) => preferHigh ? b[1] - a[1] : a[1] - b[1]);
+  const value = entries[0][1];
+  const names = entries.filter(([, v]) => v === value).map(([n]) => n).sort();
+  return { names, value };
+}
+
+function statPlayerClass(names) {
+  return names.length > 1 ? 'stat-player stat-player--multi' : 'stat-player';
+}
+
 async function loadSeason() {
   const season = document.getElementById('seasonSel').value;
   const allSeasonRaces = await sbGet(`races?season=eq.${season}&order=round.asc`);
@@ -832,31 +853,69 @@ async function loadSeason() {
     }); 
   });
 
-  const leader = Object.entries(totFlat).sort((a,b)=>b[1]-a[1])[0];
-  const avgLeader = Object.entries(totFlat).map(([p,t]) => {
+  const sortedTotals = Object.entries(totFlat).sort((a,b)=>b[1]-a[1]);
+  const leader = topBy(totFlat, true);
+  const uniqueTotals = [...new Set(sortedTotals.map(([, t]) => t))].sort((a, b) => b - a);
+  const runnerUpVal = uniqueTotals.length >= 2 ? uniqueTotals[1] : null;
+  const runnerUp = runnerUpVal != null
+    ? { names: sortedTotals.filter(([, t]) => t === runnerUpVal).map(([n]) => n).sort(), value: runnerUpVal }
+    : { names: [], value: 0 };
+  const leadOver2nd = leader.value > 0 && runnerUpVal != null
+    ? uniqueTotals[0] - runnerUpVal
+    : null;
+
+  const avgByPlayer = {};
+  PLAYERS.forEach(p => {
     const rp = races.filter(r => scores.find(s => s.race_id === r.id && s.player_name === p)).length;
-    return [p, rp > 0 ? Math.round((t/rp)*10)/10 : 0];
-  }).sort((a,b)=>b[1]-a[1])[0];
-  const mostPoles = Object.entries(poleHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
-  const mostWins  = Object.entries(winHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
-  const mostFastLaps = Object.entries(fastLapHits).sort((a,b)=>b[1]-a[1])[0]||['—',0];
-  const sprintSpecialist = Object.entries(sprintTots).sort((a,b)=>b[1]-a[1])[0]||['—',0];
-  const fewestMissed = Object.entries(missedCounts).sort((a,b)=>a[1]-b[1])[0];
-  const hasScores = leader[1] > 0;
-  const hasPoles  = mostPoles[1] > 0;
-  const hasWins   = mostWins[1] > 0;
-  const hasFastLaps = mostFastLaps[1] > 0;
-  const hasSprints = sprintSpecialist[1] > 0;
+    if (rp > 0) avgByPlayer[p] = Math.round((totFlat[p] / rp) * 10) / 10;
+  });
+  const avgLeader = topBy(avgByPlayer, true);
+
+  const fewestMissed = topBy(missedCounts, false);
+
+  let bestRound = { names: [], value: 0 };
+  scores.forEach(s => {
+    if (s.total_score > bestRound.value) {
+      bestRound = { names: [s.player_name], value: s.total_score };
+    } else if (s.total_score === bestRound.value && bestRound.value > 0 && !bestRound.names.includes(s.player_name)) {
+      bestRound.names.push(s.player_name);
+    }
+  });
+
+  const lastRace = races[races.length - 1];
+  let lastRoundTop = { names: [], value: 0 };
+  if (lastRace) {
+    const roundScores = scores.filter(s => s.race_id === lastRace.id);
+    if (roundScores.length) {
+      const max = Math.max(...roundScores.map(s => s.total_score));
+      lastRoundTop = {
+        names: roundScores.filter(s => s.total_score === max).map(s => s.player_name),
+        value: max
+      };
+    }
+  }
+
+  const mostPoles = topBy(poleHits, true);
+  const mostWins = topBy(winHits, true);
+  const mostFastLaps = topBy(fastLapHits, true);
+  const sprintSpecialist = topBy(sprintTots, true);
+  const hasScores = leader.value > 0;
+  const hasPoles = mostPoles.value > 0;
+  const hasWins = mostWins.value > 0;
+  const hasFastLaps = mostFastLaps.value > 0;
+  const hasSprints = sprintSpecialist.value > 0;
+  const seasonRoundCount = allSeasonRaces.length;
 
   document.getElementById('keyStats').innerHTML = `
-    <div class="stat-card"><div class="stat-name">Current Leader</div><div class="stat-player">${hasScores?leader[0]:'—'}</div><div class="stat-val">${hasScores?leader[1]+' pts':'No data yet'}</div></div>
-    <div class="stat-card"><div class="stat-name">Rounds Scored</div><div class="stat-player">&nbsp;</div><div class="stat-val">${races.length} <span class="stat-val--muted">/ 24</span></div></div>
-    <div class="stat-card"><div class="stat-name">Most Pole Calls</div><div class="stat-player">${hasPoles?mostPoles[0]:'—'}</div><div class="stat-val">${hasPoles?mostPoles[1]:'—'}</div></div>
-    <div class="stat-card"><div class="stat-name">Most Win Calls</div><div class="stat-player">${hasWins?mostWins[0]:'—'}</div><div class="stat-val">${hasWins?mostWins[1]:'—'}</div></div>
-    <div class="stat-card"><div class="stat-name">Sprint Specialist</div><div class="stat-player">${hasSprints?sprintSpecialist[0]:'—'}</div><div class="stat-val">${hasSprints?sprintSpecialist[1]:'—'}</div></div>
-    <div class="stat-card"><div class="stat-name">Most Fast Laps</div><div class="stat-player">${hasFastLaps?mostFastLaps[0]:'—'}</div><div class="stat-val">${hasFastLaps?mostFastLaps[1]:'—'}</div></div>
-    <div class="stat-card"><div class="stat-name">Fewest Missed</div><div class="stat-player">${fewestMissed[0]}</div><div class="stat-val">${fewestMissed[1]}</div></div>
-    <div class="stat-card"><div class="stat-name">Best Avg / Round</div><div class="stat-player">${avgLeader[0]}</div><div class="stat-val">${avgLeader[1]}</div></div>`;
+    <div class="stat-card"><div class="stat-name">Current Leader</div><div class="${statPlayerClass(leader.names)}">${hasScores?formatPlayers(leader.names):'—'}</div><div class="stat-val">${hasScores?leader.value+' pts':'No data yet'}</div></div>
+    <div class="stat-card"><div class="stat-name">Rounds Scored</div><div class="stat-player">&nbsp;</div><div class="stat-val">${races.length} <span class="stat-val--muted">/ ${seasonRoundCount}</span></div></div>
+    <div class="stat-card"><div class="stat-name">Lead over 2nd</div><div class="stat-player">${leadOver2nd != null ? formatPlayers(runnerUp.names) : '—'}</div><div class="stat-val">${leadOver2nd != null ? (leadOver2nd === 0 ? 'Tied' : '+'+leadOver2nd+' pts') : '—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Runner-up</div><div class="${statPlayerClass(runnerUp.names)}">${runnerUp.names.length?formatPlayers(runnerUp.names):'—'}</div><div class="stat-val">${runnerUp.names.length?runnerUp.value+' pts':'—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Best Single Round</div><div class="${statPlayerClass(bestRound.names)}">${bestRound.value?formatPlayers(bestRound.names):'—'}</div><div class="stat-val">${bestRound.value||'—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Best Avg / Round</div><div class="${statPlayerClass(avgLeader.names)}">${avgLeader.names.length?formatPlayers(avgLeader.names):'—'}</div><div class="stat-val">${avgLeader.names.length?avgLeader.value:'—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Fewest Missed</div><div class="${statPlayerClass(fewestMissed.names)}">${formatPlayers(fewestMissed.names)}</div><div class="stat-val">${fewestMissed.names.length?fewestMissed.value:'—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Last Round Top</div><div class="${statPlayerClass(lastRoundTop.names)}">${lastRoundTop.value?formatPlayers(lastRoundTop.names):'—'}</div><div class="stat-val">${lastRoundTop.value||'—'}</div></div>
+    <div class="stat-card"><div class="stat-name">Most Pole Calls</div><div class="${statPlayerClass(mostPoles.names)}">${hasPoles?formatPlayers(mostPoles.names):'—'}</div><div class="stat-val">${hasPoles?mostPoles.value:'—'}</div></div>`;
 
   // Chart: only rounds we have results for (evenly spaced; latest scored round on the right)
   const raceLabels = races.map(r=>`R${r.round}`);
@@ -874,10 +933,10 @@ async function loadSeason() {
   const mrSun=Object.entries(raceTots).sort((a,b)=>b[1]-a[1])[0];
 
   document.getElementById('awardsGrid').innerHTML = hasScores ? [
-    {icon:'🎯',title:'Most Pole Calls',player:hasPoles?mostPoles[0]:'—',detail:hasPoles?`${mostPoles[1]} correct poles`:'No data yet'},
-    {icon:'🏁',title:'Most Win Calls',player:hasWins?mostWins[0]:'—',detail:hasWins?`${mostWins[1]} correct winners`:'No data yet'},
-    {icon:'⚡',title:'Hot Lap Hero',player:hasFastLaps?mostFastLaps[0]:'—',detail:hasFastLaps?`${mostFastLaps[1]} fastest laps called`:'No data yet'},
-    {icon:'🚀',title:'Sprint Specialist',player:hasSprints?sprintSpecialist[0]:'—',detail:hasSprints?`${sprintSpecialist[1]} sprint pts`:'No data yet'},
+    {icon:'🎯',title:'Most Pole Calls',player:hasPoles?formatPlayers(mostPoles.names):'—',detail:hasPoles?`${mostPoles.value} correct poles`:'No data yet'},
+    {icon:'🏁',title:'Most Win Calls',player:hasWins?formatPlayers(mostWins.names):'—',detail:hasWins?`${mostWins.value} correct winners`:'No data yet'},
+    {icon:'⚡',title:'Hot Lap Hero',player:hasFastLaps?formatPlayers(mostFastLaps.names):'—',detail:hasFastLaps?`${mostFastLaps.value} fastest laps called`:'No data yet'},
+    {icon:'🚀',title:'Sprint Specialist',player:hasSprints?formatPlayers(sprintSpecialist.names):'—',detail:hasSprints?`${sprintSpecialist.value} sprint pts`:'No data yet'},
     {icon:'⏱️',title:'Mr Saturday',player:mrSat[0],detail:`${mrSat[1]} qualifying pts`},
     {icon:'🌞',title:'Sunday Merchant',player:mrSun[0],detail:`${mrSun[1]} race pts`},
     {icon:'🎢',title:'Volatility King',player:vol[0],detail:vol[1]==='N/A'?'Need 2+ rounds':`${vol[1]}pt swing`},
