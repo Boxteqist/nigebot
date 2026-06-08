@@ -1,7 +1,7 @@
 # NigeBot — Full Repo Code Review
 
-**Date:** March 2025  
-**Scope:** Entire repository (index.html, test.html, version.js, deploy.yml, sql/, README.md)
+**Date:** March 2025 (notes refreshed June 2026)  
+**Scope:** Entire repository (index.html, test.html, shared.js, version.js, deploy.yml, sql/, README.md)
 
 ---
 
@@ -40,9 +40,7 @@ The repo is a small, focused F1 predictions app: vanilla HTML/CSS/JS, Supabase, 
 
 ### 4.1 Shared constants
 
-- **PLAYERS:** Identical in `index.html` and `test.html`. Same for **QUALI_PTS**, **RACE_PTS**, **SPRINT_PTS**, **FASTEST_LAP_PTS**.
-- **DRIVER_CODES:** Slightly different between the two files (index has SAI, SAR, BOT, ZHO; test has different set). Predictions and scoring can diverge if one list is updated and not the other.
-- **Recommendation:** Prefer a single shared script (e.g. `shared.js` or `config.js`) loaded by both pages with PLAYERS, points arrays, and DRIVER_CODES. Failing that, document “canonical” list (e.g. index.html) and keep test.html in sync.
+- **Done (Jun 2026):** `shared.js` holds PLAYERS, points arrays, DRIVER_CODES, `norm()`, and `calcScore()`; both pages load it after `version.js`.
 
 ### 4.2 Supabase helpers
 
@@ -125,7 +123,9 @@ The repo is a small, focused F1 predictions app: vanilla HTML/CSS/JS, Supabase, 
 | Priority | Item |
 |----------|------|
 | Done | Fix Man Cave publish using `sTop3`/`hasSprint` from `previewData` (sprint results and sprint scores). |
-| High | Align DRIVER_CODES (and PLAYERS/points) between index and test, or move to shared script. |
+| Done | Shared `shared.js` for PLAYERS, DRIVER_CODES, points, `norm()`, `calcScore()`. |
+| Done | Man Cave publish uses `playerScores` from `previewData` (not stale `preds`). |
+| Done | Jolpica fetch/publish by GP name when DB `round` drifts; `sql/sync_2026_race_names.sql` for DB names. |
 | Medium | Harden sbGet/sbUpsert: explicit handling of `!r.ok` in index, consistent error shape. |
 | Low | Shared JS for Supabase + scoring + constants to avoid drift. |
 | Low | A11y: tab roles, labels, live regions for status messages. |

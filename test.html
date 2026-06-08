@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NigeBot Man Cave</title>
 <script src="version.js"></script>
+<script src="shared.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0f0f13; color: #f0f0f0; font-family: 'Segoe UI', sans-serif; padding: 24px; }
@@ -186,22 +187,7 @@
 </div>
 
 <script>
-const SB_URL = 'https://qkmukcuqosvlumsrqyay.supabase.co';
-const SB_KEY = 'sb_publishable_dkJN0bxvkkW7JHXAvZ62XQ_tpxexARU';
 const hdrs = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
-const QUALI_PTS = [12.5, 9, 7.5];
-const RACE_PTS  = [25, 18, 15];
-const SPRINT_PTS = [12.5, 9, 7.5]; // sprint race is half main race points
-const FASTEST_LAP_PTS = 10;
-const PLAYERS   = ['Ollie','Tom','Tim','Ralph','Herbie','Dave','Jason','NigeBot'];
-
-const DRIVER_CODES = {
-  'VER':'Verstappen','NOR':'Norris','LEC':'Leclerc','PIA':'Piastri',
-  'HAM':'Hamilton','RUS':'Russell','ANT':'Antonelli','ALO':'Alonso',
-  'STR':'Stroll','GAS':'Gasly','OCO':'Ocon','HUL':'Hulkenberg',
-  'MAG':'Magnussen','TSU':'Tsunoda','LAW':'Lawson','ALB':'Albon',
-  'BEA':'Bearman','HAD':'Hadjar','DOO':'Doohan','BOR':'Bortoleto','COL':'Colapinto'
-};
 const JOLPICA_FETCH_OPTS = { headers: { 'Accept': 'application/json' } };
 
 /** Full season calendar from Jolpica (canonical names and round numbers). */
@@ -229,24 +215,6 @@ async function jolpicaRoundForRaceName(season, raceName) {
     ? `v${window.NIGEBOT_VERSION}`
     : 'vDEV';
 })();
-
-function norm(s) {
-  if (!s) return '';
-  const up = s.trim().toUpperCase();
-  if (DRIVER_CODES[up]) return DRIVER_CODES[up].toLowerCase();
-  return s.trim().toLowerCase();
-}
-
-function calcScore(preds, results, pts) {
-  let total = 0;
-  preds.forEach((pred, pi) => {
-    if (!pred) return;
-    const ei = results.findIndex(r => norm(r) === norm(pred));
-    if (ei === pi) total += pts[pi];
-    else if (ei !== -1 && Math.abs(ei - pi) === 1) total += pts[ei] / 2;
-  });
-  return total;
-}
 
 async function sbGet(path) {
   const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: hdrs });

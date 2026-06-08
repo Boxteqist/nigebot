@@ -20,12 +20,15 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 |------|-------------|
 | `index.html` | Main NigeBot app — predictions, leaderboard, stats, scoring guide |
 | `test.html` | Man Cave — admin tools, test suite, results publishing, **Copy for Claude** |
+| `shared.js` | Shared players, driver codes, points tables, `norm()` / `calcScore()` (used by both pages) |
 | `sql/rls_publish_writes_enable.sql` | Run in Supabase **before** publishing from Man Cave (temporary write access) |
 | `sql/rls_publish_writes_disable.sql` | Run in Supabase **after** publishing to re-lock `results`, `scores`, `published_log` |
 | `sql/rls_predictions_public_writes.sql` | Run if prediction saves fail with RLS errors |
 | `sql/add_nigebot_player.sql` | Backfill NigeBot’s scores (Australia) and predictions (China); run in Supabase SQL Editor |
 | `sql/remove_cancelled_2026_bahrain_saudi.sql` | Optional: delete `races` (and related rows) for cancelled 2026 Bahrain / Saudi Arabian GPs if they exist |
-| `sql/fix_2026_race_names.sql` | Optional: correct `races.name` for 2026 R1–R6 if Man Cave shows the wrong GP at a round (e.g. Miami at R6 instead of Monaco) |
+| `sql/sync_2026_race_names.sql` | Optional: correct all 2026 `races.name` values to match Jolpica (22 rounds) |
+| `sql/maintenance_checklist.sql` | Optional: verify queries — policies, orphan races, duplicate GP names |
+| `sql/fix_2026_race_names.sql` | Pointer only — use `sync_2026_race_names.sql` instead |
 | `.github/workflows/supabase-heartbeat.yml` | Daily ping so the Free-tier Supabase project is not paused for inactivity |
 
 ---
@@ -43,7 +46,7 @@ NigeBot is a lightweight F1 prediction game for the Park Estate group. Each race
 1. Open Man Cave after the race weekend
 2. Go to **Tests** tab and run all tests — confirm Jolpica API is green and current round has full results
 3. Go to **Results** tab — select the season and round. The **Actual Results** card shows four columns (on sprint weekends): Sprint, Qualifying, Race, Fastest Lap
-4. Hit **Fetch Results** and review the score preview for all players (sorted highest to lowest)
+4. Hit **Fetch Results** and review the score preview for all players (sorted highest to lowest). Jolpica results are matched by **Grand Prix name**, not only the DB round number — so the correct weekend is fetched even if `races.round` in Supabase is out of date.
 5. When ready, the **Publish Results to NigeBot** button turns amber — hit it to push scores live
 6. Button turns green with a timestamp once published — "Last published" also updates with race name and time
 7. **WhatsApp via Claude** — **Fetch** first for race weekends, then **Copy for Claude**. You get high-level facts (podiums, round + season scores, talking points, app URL) to paste into Claude — not full prediction grids. Optional notes for reminders, birthdays, etc.
@@ -75,8 +78,17 @@ Points are awarded for predicting the top 3 in qualifying, the Sprint Race (on S
 
 On the **Season** tab the app shows:
 
-- **Season standings**: cumulative qualifying, sprint, race, and total points per player.
-- **Key stats**: including Most Pole Calls, Most Win Calls, Sprint Specialist, Most Fast Laps, Fewest Missed, and Best Avg / Round.
+- **Season standings**: cumulative qualifying, sprint, race, fastest lap, and total points per player, plus a **Delta** column (points ahead of the player directly below).
+- **Key stats** (3×3 grid, ties shown as combined names):
+  - **Current Leader** — season points leader(s)
+  - **Rounds Scored** — published rounds vs full season calendar from Jolpica (e.g. `6 / 22`)
+  - **Lead over 2nd** — leader’s name and points gap to 2nd place
+  - **Clean Sweeps** — perfect quali top 3 (29 pts) or perfect race top 3 (58 pts) in a round
+  - **Best Single Round** — highest one-weekend score
+  - **Best Avg / Round** — highest average per scored round
+  - **Fewest Missed** — fewest rounds without predictions (all tied players listed)
+  - **Last Round Top** — top scorer in the most recently published round
+  - **Most Pole Calls** — most correct pole predictions
 - **Awards**:
   - **Most Pole Calls** — most correctly called poles.
   - **Most Win Calls** — most correctly called Grand Prix winners.
@@ -88,6 +100,22 @@ On the **Season** tab the app shows:
   - **Consistency King** — lowest variance in race scores.
 
 There is also **Crofty’s Split — Points Breakdown**, which shows, for each player, what percentage of their season points comes from qualifying, sprint races, the Grand Prix, and fastest lap.
+
+---
+
+## Database maintenance (occasional)
+
+Run in **Supabase → SQL Editor** (browser). No Supabase CLI required.
+
+| When | Script |
+|------|--------|
+| Wrong GP name at a round (e.g. Miami at R6) | `sql/sync_2026_race_names.sql` |
+| Old cancelled Bahrain / Saudi rows still listed | `sql/remove_cancelled_2026_bahrain_saudi.sql` |
+| Prediction saves blocked by RLS | `sql/rls_predictions_public_writes.sql` |
+| Publish blocked by RLS | `sql/rls_publish_writes_enable.sql` then `sql/rls_publish_writes_disable.sql` after |
+| General health check | `sql/maintenance_checklist.sql` (inspect results; delete orphan races manually if needed) |
+
+**Current 2026 DB status (Jun 2026):** seven scored rounds (R1–R7), names aligned with Jolpica, no duplicate GP rows. Re-run **sync** after FIA calendar changes; Man Cave **Fetch** also resolves Jolpica by GP name.
 
 ---
 
