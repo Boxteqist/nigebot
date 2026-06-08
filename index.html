@@ -795,8 +795,13 @@ async function loadSeason() {
   const medals = ['🥇','🥈','🥉'];
   document.getElementById('leaderboard').innerHTML = `
     <table class="data-table">
-      <thead><tr><th>#</th><th>Player</th><th>Quali</th><th>Sprint</th><th>Race</th><th>FL</th><th>Total</th></tr></thead>
-      <tbody>${sorted.map(([name,s],i)=>`<tr><td>${medals[i]||i+1}</td><td><strong>${name}</strong></td><td>${s.q}</td><td>${s.s}</td><td>${s.r}</td><td>${s.fl}</td><td>${s.t}</td></tr>`).join('')}</tbody>
+      <thead><tr><th>#</th><th>Player</th><th>Quali</th><th>Sprint</th><th>Race</th><th>FL</th><th>Total</th><th>Delta</th></tr></thead>
+      <tbody>${sorted.map(([name,s],i)=>{
+        const below = sorted[i + 1];
+        const delta = below ? s.t - below[1].t : null;
+        const deltaCell = delta != null ? (delta === 0 ? '0' : `+${delta}`) : '—';
+        return `<tr><td>${medals[i]||i+1}</td><td><strong>${name}</strong></td><td>${s.q}</td><td>${s.s}</td><td>${s.r}</td><td>${s.fl}</td><td>${s.t}</td><td>${deltaCell}</td></tr>`;
+      }).join('')}</tbody>
     </table>`;
 
   if (!races.length) { document.getElementById('keyStats').innerHTML='<p style="color:#888;font-size:0.85rem;grid-column:1/-1">No scored races yet.</p>'; return; }
