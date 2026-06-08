@@ -718,7 +718,7 @@ async function copyForClaude() {
 
 async function publishResults() {
   if (!previewData) return;
-  const { season, round, apiRound, raceId, raceName, qTop3, rTop3, sTop3, hasSprint, preds, fastestLapDriver } = previewData;
+  const { season, round, apiRound, raceId, raceName, qTop3, rTop3, sTop3, hasSprint, playerScores, preds, fastestLapDriver } = previewData;
   const effRound = apiRound != null ? apiRound : round;
   const btn = document.getElementById('publishBtn');
   const msg = document.getElementById('publishMsg');
@@ -741,30 +741,45 @@ async function publishResults() {
       fastest_lap: parseInt(effRound,10) > 1 ? fastestLapDriver : null,
       fetched_at:new Date().toISOString()
     });
-    const scoreRows = PLAYERS.map(player => {
-      const p = preds.find(x => x.player_name === player);
-      const qPreds = p ? [p.quali_p1,p.quali_p2,p.quali_p3] : [null,null,null];
-      const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
-      const sPreds = p ? [p.sprint_p1,p.sprint_p2,p.sprint_p3] : [null,null,null];
-      const qs = calcScore(qPreds, qTop3, QUALI_PTS);
-      const rs = calcScore(rPreds, rTop3, RACE_PTS);
-      let ss = hasSprint ? calcScore(sPreds, sTop3, SPRINT_PTS) : 0;
-      if (player === 'NigeBot') ss = 0; // NigeBot receives zero sprint points
-      const flPred = p ? p.fastest_lap : null;
-      const flScore = (parseInt(effRound,10) > 1 && fastestLapDriver && flPred && norm(flPred) === norm(fastestLapDriver))
-        ? FASTEST_LAP_PTS
-        : 0;
-      return {
-        player_name:player,
-        race_id:rid,
-        quali_score:qs,
-        race_score:rs,
-        sprint_score:ss,
-        fastest_lap_score: flScore,
-        total_score:qs+rs+ss+flScore,
-        calculated_at:new Date().toISOString()
-      };
-    });
+    let scoreRows;
+    if (playerScores?.length) {
+      scoreRows = playerScores.map(ps => ({
+        player_name: ps.player,
+        race_id: rid,
+        quali_score: ps.qScore ?? 0,
+        race_score: ps.rScore ?? 0,
+        sprint_score: ps.sScore ?? 0,
+        fastest_lap_score: ps.flScore ?? 0,
+        total_score: ps.total ?? 0,
+        calculated_at: new Date().toISOString()
+      }));
+    } else {
+      const predList = preds || [];
+      scoreRows = PLAYERS.map(player => {
+        const p = predList.find(x => x.player_name === player);
+        const qPreds = p ? [p.quali_p1,p.quali_p2,p.quali_p3] : [null,null,null];
+        const rPreds = p ? [p.race_p1,p.race_p2,p.race_p3]    : [null,null,null];
+        const sPreds = p ? [p.sprint_p1,p.sprint_p2,p.sprint_p3] : [null,null,null];
+        const qs = calcScore(qPreds, qTop3, QUALI_PTS);
+        const rs = calcScore(rPreds, rTop3, RACE_PTS);
+        let ss = hasSprint ? calcScore(sPreds, sTop3, SPRINT_PTS) : 0;
+        if (player === 'NigeBot') ss = 0;
+        const flPred = p ? p.fastest_lap : null;
+        const flScore = (parseInt(effRound,10) > 1 && fastestLapDriver && flPred && norm(flPred) === norm(fastestLapDriver))
+          ? FASTEST_LAP_PTS
+          : 0;
+        return {
+          player_name: player,
+          race_id: rid,
+          quali_score: qs,
+          race_score: rs,
+          sprint_score: ss,
+          fastest_lap_score: flScore,
+          total_score: qs + rs + ss + flScore,
+          calculated_at: new Date().toISOString()
+        };
+      });
+    }
     await sbUpsert('scores', scoreRows);
     await sbUpsert('published_log', { race_id:rid, race_name:raceName, published_at:new Date().toISOString() });
     msg.className = 'status-msg success';
