@@ -78,7 +78,7 @@ Points are awarded for predicting the top 3 in qualifying, the Sprint Race (on S
 
 On the **Season** tab the app shows:
 
-- **Season standings**: cumulative qualifying, sprint, race, fastest lap, and total points per player, plus a **Delta** column (points ahead of the player directly below).
+- **Season standings**: cumulative qualifying, sprint, race, fastest lap, and total points per player, plus a **Delta** column (points behind the leader; leader shows —).
 - **Key stats** (3×3 grid, ties shown as combined names):
   - **Current Leader** — season points leader(s)
   - **Rounds Scored** — published rounds vs full season calendar from Jolpica (e.g. `6 / 22`)
