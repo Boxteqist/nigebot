@@ -1,4 +1,6 @@
--- Run after publishing — removes temporary publish policies (re-lock).
+-- Drops the old temporary publish policies if they are still present.
+-- sql/one_time_setup.sql does this as well, and also revokes the table grants.
+-- Safe to run. It does not delete any rows.
 
 DROP POLICY IF EXISTS results_insert_public_tmp ON public.results;
 DROP POLICY IF EXISTS results_update_public_tmp ON public.results;

@@ -6,7 +6,7 @@ on:
 
 env:
   # Base app version; bump this manually when you want a major/minor change.
-  BASE_VERSION: 1.5.0
+  BASE_VERSION: 1.6.0
 
 permissions:
   contents: read

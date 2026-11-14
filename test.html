@@ -31,7 +31,8 @@
   .field-label { font-size: 0.72rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
   select { background: #0f0f13; border: 1px solid #3a3a4a; border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 0.88rem; }
   textarea { background: #0f0f13; border: 1px solid #3a3a4a; border-radius: 8px; padding: 10px 12px; color: #f0f0f0; font-size: 0.85rem; line-height: 1.5; font-family: 'Segoe UI', sans-serif; width: 100%; resize: vertical; }
-  textarea:focus, select:focus { outline: none; border-color: #e10600; }
+  textarea:focus, select:focus, input:focus { outline: none; border-color: #e10600; }
+  input[type="password"] { background: #0f0f13; border: 1px solid #3a3a4a; border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 0.88rem; min-width: 220px; }
   .test { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid #1a1a24; font-size: 0.88rem; }
   .test:last-child { border-bottom: none; }
   .test-icon { font-size: 1rem; margin-top: 1px; min-width: 20px; }
@@ -178,9 +179,14 @@
       <h2>Score Preview</h2>
       <div class="preview-grid" id="previewGrid"></div>
       <div class="publish-row">
+        <div>
+          <label class="field-label" for="adminPassword">Admin password</label>
+          <input type="password" id="adminPassword" autocomplete="current-password" placeholder="Not saved in the page">
+        </div>
         <button class="btn" id="publishBtn" onclick="publishResults()" disabled style="background:#2a2a3a;color:#666;cursor:not-allowed">🔒 Publish Results to NigeBot</button>
         <div class="last-published" id="lastPublished"></div>
       </div>
+      <p class="field-hint">The password is checked in the database. Results, scores, and the publish log stay closed to the public site.</p>
       <div id="publishMsg" class="status-msg hidden"></div>
     </div>
   </div>
@@ -222,6 +228,24 @@ async function sbGet(path) {
   return r.json();
 }
 
+async function sbRpc(fn, args) {
+  const r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: hdrs,
+    body: JSON.stringify(args)
+  });
+  let data = {};
+  try { data = await r.json(); } catch (e) { data = {}; }
+  if (!r.ok) {
+    let msg = data.message || data.error || `HTTP ${r.status}`;
+    if (r.status === 404 || /could not find the function/i.test(String(msg))) {
+      msg = 'Publish is not set up yet. Run sql/one_time_setup.sql once in the Supabase SQL editor.';
+    }
+    throw new Error(msg);
+  }
+  return data;
+}
+
 async function sbUpsert(path, body) {
   const h = { ...hdrs, 'Prefer': 'resolution=merge-duplicates,return=representation' };
   let url = `${SB_URL}/rest/v1/${path}`;
@@ -248,11 +272,15 @@ async function sbUpsert(path, body) {
   return data;
 }
 
-/** Stable row for prediction tests — unordered races?limit=1 is nondeterministic across PostgreSQL plans. */
+/** A round whose qualifying start is still in the future. Past rounds are locked in the database. */
 async function testRaceForPredictions() {
-  const races = await sbGet('races?order=season.asc,round.asc&limit=1');
-  if (!races.length) throw new Error('No races in DB');
-  return races[0];
+  const races = await sbGet('races?order=season.desc,round.desc');
+  if (!Array.isArray(races) || !races.length) throw new Error('No races in DB');
+  const open = races.find(r => r.qualifying_at && new Date(r.qualifying_at).getTime() > Date.now());
+  if (!open) {
+    throw new Error('No race with qualifying still in the future. Open an upcoming round in NigeBot first — past rounds are locked.');
+  }
+  return open;
 }
 
 async function getRaceWithPredictions() {
@@ -355,6 +383,9 @@ async function fetchPreview() {
     const sTop3 = sRace ? sRace.SprintResults.slice(0,3).map(d => d.Driver.familyName) : null;
     const hasQual = !!qTop3, hasRace = !!rTop3;
     const hasSprint = !!sTop3;
+    const calendar = await jolpicaSeasonRaces(season);
+    const calRace = (calendar || []).find(r => String(r.round) === String(apiRound));
+    const sprintWeekend = !!(calRace && calRace.Sprint) || hasSprint;
 
     // Fastest lap: try dedicated endpoint first, then fall back to race results (Ergast puts FastestLap on the driver's result)
     let fastestLapDriver = null;
@@ -386,8 +417,21 @@ async function fetchPreview() {
     }
 
     const sprintBlock = document.getElementById('as_sprintBlock');
-    if (hasSprint) {
-      ['sr1','sr2','sr3'].forEach((id,i) => { document.getElementById('a'+id).textContent=sTop3[i]; });
+    const podiumColors = ['#ffd700', '#c0c0c0', '#cd7f32'];
+    if (sprintWeekend) {
+      if (hasSprint) {
+        ['sr1','sr2','sr3'].forEach((id,i) => {
+          const el = document.getElementById('a'+id);
+          el.textContent = sTop3[i];
+          el.style.color = podiumColors[i];
+        });
+      } else {
+        ['sr1','sr2','sr3'].forEach(id => {
+          const el = document.getElementById('a'+id);
+          el.textContent = 'Pending';
+          el.style.color = '#ffaa44';
+        });
+      }
       if (sprintBlock) sprintBlock.classList.remove('hidden');
     } else {
       ['sr1','sr2','sr3'].forEach(id => { document.getElementById('a'+id).textContent='—'; });
@@ -451,7 +495,12 @@ async function fetchPreview() {
     }).join('');
 
     const roundNum = parseInt(apiRound, 10);
-    const fullResults = hasQual && hasRace && (roundNum === 1 || fastestLapDriver);
+    const baseReady = hasQual && hasRace && (roundNum === 1 || fastestLapDriver);
+    const fullResults = publishReady({
+      hasQual, hasRace, hasSprint, sprintWeekend,
+      round: roundNum,
+      fastestLapDriver
+    });
 
     const publishBtn = document.getElementById('publishBtn');
     if (fullResults) {
@@ -471,7 +520,7 @@ async function fetchPreview() {
     previewData = {
       season, round: dbRound, apiRound, raceId, raceName,
       qTop3: qTop3 || [], rTop3: rTop3 || [], sTop3: sTop3 || null,
-      hasSprint, hasQual, hasRace, fastestLapDriver,
+      hasSprint, sprintWeekend, hasQual, hasRace, fastestLapDriver,
       playerScores: playerScores.map(ps => ({
         player: ps.player,
         qPreds: ps.qPreds, rPreds: ps.rPreds, sPreds: ps.sPreds,
@@ -483,6 +532,9 @@ async function fetchPreview() {
     if (fullResults) {
       msg.className = 'status-msg success';
       msg.textContent = `✅ Full results fetched for ${raceName} — ready to publish`;
+    } else if (baseReady && sprintWeekend && !hasSprint) {
+      msg.className = 'status-msg info';
+      msg.textContent = `⏳ Sprint results are not in yet for ${raceName} — publish stays off until the sprint is in Jolpica`;
     } else if (hasQual && hasRace && roundNum > 1 && !fastestLapDriver) {
       msg.className = 'status-msg info';
       msg.textContent = `⏳ Qualifying and race available for ${raceName} — fastest lap still pending`;
@@ -686,40 +738,32 @@ async function copyForClaude() {
 
 async function publishResults() {
   if (!previewData) return;
-  const { season, round, apiRound, raceId, raceName, qTop3, rTop3, sTop3, hasSprint, playerScores, preds, fastestLapDriver } = previewData;
+  const { apiRound, raceId, raceName, qTop3, rTop3, sTop3, hasSprint, sprintWeekend, playerScores, preds, fastestLapDriver } = previewData;
   const effRound = apiRound != null ? apiRound : round;
   const btn = document.getElementById('publishBtn');
   const msg = document.getElementById('publishMsg');
+  const password = document.getElementById('adminPassword').value.trim();
+  if (!password) {
+    msg.className = 'status-msg error';
+    msg.textContent = 'Enter the admin password. It is not stored in the page.';
+    msg.classList.remove('hidden');
+    document.getElementById('adminPassword').focus();
+    return;
+  }
   btn.disabled = true;
   msg.className = 'status-msg info'; msg.textContent = '⏳ Publishing...'; msg.classList.remove('hidden');
   try {
-    let rid = raceId;
-    if (!rid) {
-      const upserted = await sbUpsert('races', { season:parseInt(season), round:parseInt(round), name:raceName, qualifying_at:new Date().toISOString(), race_at:new Date().toISOString() });
-      rid = upserted?.[0]?.id;
-    }
-    if (!rid) throw new Error('Could not resolve race ID');
-    await sbUpsert('results', {
-      race_id:rid,
-      quali_p1:qTop3[0], quali_p2:qTop3[1], quali_p3:qTop3[2],
-      race_p1:rTop3[0],  race_p2:rTop3[1],  race_p3:rTop3[2],
-      sprint_p1:sTop3 ? sTop3[0] : null,
-      sprint_p2:sTop3 ? sTop3[1] : null,
-      sprint_p3:sTop3 ? sTop3[2] : null,
-      fastest_lap: parseInt(effRound,10) > 1 ? fastestLapDriver : null,
-      fetched_at:new Date().toISOString()
-    });
+    const rid = raceId;
+    if (!rid) throw new Error('This round is not in the database yet. Open it once in NigeBot, then publish.');
     let scoreRows;
     if (playerScores?.length) {
       scoreRows = playerScores.map(ps => ({
         player_name: ps.player,
-        race_id: rid,
         quali_score: ps.qScore ?? 0,
         race_score: ps.rScore ?? 0,
         sprint_score: ps.sScore ?? 0,
         fastest_lap_score: ps.flScore ?? 0,
-        total_score: ps.total ?? 0,
-        calculated_at: new Date().toISOString()
+        total_score: ps.total ?? 0
       }));
     } else {
       const predList = preds || [];
@@ -738,30 +782,39 @@ async function publishResults() {
           : 0;
         return {
           player_name: player,
-          race_id: rid,
           quali_score: qs,
           race_score: rs,
           sprint_score: ss,
           fastest_lap_score: flScore,
-          total_score: qs + rs + ss + flScore,
-          calculated_at: new Date().toISOString()
+          total_score: qs + rs + ss + flScore
         };
       });
     }
-    await sbUpsert('scores', scoreRows);
-    await sbUpsert('published_log', { race_id:rid, race_name:raceName, published_at:new Date().toISOString() });
+    await sbRpc('publish_results', {
+      p_password: password,
+      p_payload: {
+        race_id: rid,
+        race_name: raceName,
+        sprint_weekend: !!sprintWeekend,
+        results: {
+          quali_p1: qTop3[0], quali_p2: qTop3[1], quali_p3: qTop3[2],
+          race_p1: rTop3[0], race_p2: rTop3[1], race_p3: rTop3[2],
+          sprint_p1: sTop3 ? sTop3[0] : null,
+          sprint_p2: sTop3 ? sTop3[1] : null,
+          sprint_p3: sTop3 ? sTop3[2] : null,
+          fastest_lap: parseInt(effRound, 10) > 1 ? fastestLapDriver : null
+        },
+        scores: scoreRows
+      }
+    });
     msg.className = 'status-msg success';
     msg.textContent = `✅ Results published for ${raceName}! Scores are now live in NigeBot.`;
     btn.className = 'btn green';
     btn.textContent = `✅ Published — ${new Date().toLocaleString('en-GB', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}`;
     loadLastPublished();
   } catch(e) {
-    const m = String(e.message || '');
-    const publishRlsHint =
-      m.includes('row-level security') && /results|scores|published_log/i.test(m)
-        ? ' Run sql/rls_publish_writes_enable.sql in Supabase SQL Editor, publish again, then sql/rls_publish_writes_disable.sql.'
-        : '';
-    msg.className = 'status-msg error'; msg.textContent = `❌ ${m}${publishRlsHint}`;
+    msg.className = 'status-msg error';
+    msg.textContent = `❌ ${e.message || e}`;
     btn.disabled = false;
   }
 }
@@ -837,22 +890,30 @@ const testGroups = [
           ];
           return `${race.name} (R${race.round}) — ${parts.join(', ')}`;
         }},
-      { name: 'Current round ready to publish', detail: 'Passes when quali and race results are in the API (so you can publish from Results tab). Uses same safe parsing as above.',
+      { name: 'Current round ready to publish', detail: 'Passes when quali, race, and (on a sprint weekend) sprint results are in the API.',
         run: async () => {
           const race = await getRaceWithPredictions();
-          const [qRes, rRes] = await Promise.all([
+          const [qRes, rRes, sRes, calendar] = await Promise.all([
             fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/qualifying/`, JOLPICA_FETCH_OPTS),
-            fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/results/`, JOLPICA_FETCH_OPTS)
+            fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/results/`, JOLPICA_FETCH_OPTS),
+            fetch(`https://api.jolpi.ca/ergast/f1/${race.season}/${race.round}/sprint/`, JOLPICA_FETCH_OPTS),
+            jolpicaSeasonRaces(race.season)
           ]);
           const safeJson = async (r) => {
             const ct = r.headers.get('content-type') || '';
             if (!r.ok || !ct.includes('application/json')) return null;
             try { return JSON.parse(await r.text()); } catch (e) { return null; }
           };
-          const [qData, rData] = await Promise.all([safeJson(qRes), safeJson(rRes)]);
+          const [qData, rData, sData] = await Promise.all([safeJson(qRes), safeJson(rRes), safeJson(sRes)]);
           const hasQ = !!qData?.MRData?.RaceTable?.Races?.[0];
           const hasR = !!rData?.MRData?.RaceTable?.Races?.[0];
-          if (hasQ && hasR) return `${race.name}: Quali and race in API — ready to publish`;
+          const hasS = !!sData?.MRData?.RaceTable?.Races?.[0]?.SprintResults?.length;
+          const cal = (calendar || []).find(r => String(r.round) === String(race.round));
+          const sprintWeekend = !!(cal && cal.Sprint) || !!race.is_sprint;
+          if (hasQ && hasR && sprintWeekend && !hasS) {
+            throw new Error(`${race.name}: sprint weekend — sprint results not in the API yet`);
+          }
+          if (hasQ && hasR) return `${race.name}: results in the API — ready to publish`;
           if (hasQ) throw new Error(`${race.name}: Qualifying only — race results not in API yet`);
           throw new Error(`${race.name}: No results in API yet`);
         }},
@@ -888,6 +949,20 @@ const testGroups = [
           const pred = { fastest_lap: 'NOR' }; // wrong driver
           const score = norm(pred.fastest_lap) === norm(fastestLapDriver) ? FASTEST_LAP_PTS : 0;
           if (score !== 0) throw new Error(`Expected 0, got ${score}`);
+        }},
+      { name: 'Three identical drivers rejected', detail: 'VER / VER / VER is rejected. A pair, or blanks, is not.',
+        run: () => {
+          if (!threeIdentical('VER', 'VER', 'VER')) throw new Error('Expected three identical to be rejected');
+          if (!threeIdentical('ver', 'VER', 'Ver')) throw new Error('Case should not matter');
+          if (threeIdentical('VER', 'VER', 'NOR')) throw new Error('A pair is allowed');
+          if (threeIdentical('VER', '', '')) throw new Error('Blanks are not three identical');
+        }},
+      { name: 'Sprint weekend waits for sprint results', detail: 'Publish stays off on a sprint weekend until sprint results exist.',
+        run: () => {
+          const base = { hasQual: true, hasRace: true, round: 5, fastestLapDriver: 'Norris', hasSprint: false };
+          if (publishReady({ ...base, sprintWeekend: true })) throw new Error('Sprint weekend without sprint results must stay unpublished');
+          if (!publishReady({ ...base, sprintWeekend: true, hasSprint: true })) throw new Error('Sprint weekend with sprint results should be publishable');
+          if (!publishReady({ ...base, sprintWeekend: false })) throw new Error('A normal weekend should be publishable without sprint results');
         }},
     ]
   },
@@ -949,10 +1024,16 @@ const testGroups = [
           if (!preds.length) throw new Error('Prediction not found');
           if (preds[0].quali_p1 !== 'HAM') throw new Error(`Expected HAM, got ${preds[0].quali_p1}`);
         }},
-      { name: 'Clean up test data', detail: 'Removes the __test__ prediction from DB',
+      { name: 'Clean up test data', detail: 'Removes the __test__ prediction when delete is allowed. Public delete is otherwise closed.',
         run: async () => {
           const r = await fetch(`${SB_URL}/rest/v1/predictions?player_name=eq.__test__`, { method:'DELETE', headers:hdrs });
-          if (!r.ok) throw new Error(`Cleanup failed: HTTP ${r.status}`);
+          if (r.ok) return 'Test row removed';
+          const body = await r.json().catch(() => ({}));
+          const msg = body.message || '';
+          if (r.status === 401 || r.status === 403 || /row-level security|permission denied/i.test(msg)) {
+            return 'Public delete is closed. The __test__ row can stay — it is not a real player.';
+          }
+          throw new Error(msg || `Cleanup failed: HTTP ${r.status}`);
         }},
     ]
   }

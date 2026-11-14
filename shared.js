@@ -37,3 +37,37 @@ function calcScore(preds, results, pts) {
   });
   return total;
 }
+
+function blankPick(s) {
+  if (s == null) return '';
+  return String(s).trim();
+}
+
+/** True when all three podium slots are filled with the same driver. */
+function threeIdentical(a, b, c) {
+  const x = blankPick(a).toUpperCase();
+  const y = blankPick(b).toUpperCase();
+  const z = blankPick(c).toUpperCase();
+  return x !== '' && x === y && y === z;
+}
+
+/** True once the session start time has been reached. Missing time means not locked. */
+function sessionStarted(iso, nowMs) {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return false;
+  const now = nowMs == null ? Date.now() : nowMs;
+  return now >= t;
+}
+
+/**
+ * Publish stays off until qualifying, the race, and (from round 2) fastest lap
+ * are in, and until sprint results are in on a sprint weekend.
+ */
+function publishReady(o) {
+  const roundNum = parseInt(o.round, 10);
+  if (!o.hasQual || !o.hasRace) return false;
+  if (!(roundNum === 1 || o.fastestLapDriver)) return false;
+  if (o.sprintWeekend && !o.hasSprint) return false;
+  return true;
+}

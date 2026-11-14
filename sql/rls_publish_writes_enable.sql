@@ -1,29 +1,12 @@
--- TEMPORARY — run in Supabase SQL Editor before publishing from Man Cave (browser uses anon key).
--- Symptom: new row violates row-level security policy for table "results" | "scores" | "published_log"
+-- RETIRED. Do not run.
 --
--- After publishing, run sql/rls_publish_writes_disable.sql to drop these policies again.
+-- Publishing no longer opens results, scores, or published_log to the website key.
+-- Man Cave calls publish_results with the admin password.
+-- Setup is sql/one_time_setup.sql (once). Re-running this old enable script
+-- would put the temporary public write policies back, so it now refuses.
 
-DROP POLICY IF EXISTS results_insert_public_tmp ON public.results;
-DROP POLICY IF EXISTS results_update_public_tmp ON public.results;
-DROP POLICY IF EXISTS scores_insert_public_tmp ON public.scores;
-DROP POLICY IF EXISTS scores_update_public_tmp ON public.scores;
-DROP POLICY IF EXISTS published_log_insert_public_tmp ON public.published_log;
-DROP POLICY IF EXISTS published_log_update_public_tmp ON public.published_log;
-
-CREATE POLICY results_insert_public_tmp
-  ON public.results FOR INSERT TO public WITH CHECK (true);
-
-CREATE POLICY results_update_public_tmp
-  ON public.results FOR UPDATE TO public USING (true) WITH CHECK (true);
-
-CREATE POLICY scores_insert_public_tmp
-  ON public.scores FOR INSERT TO public WITH CHECK (true);
-
-CREATE POLICY scores_update_public_tmp
-  ON public.scores FOR UPDATE TO public USING (true) WITH CHECK (true);
-
-CREATE POLICY published_log_insert_public_tmp
-  ON public.published_log FOR INSERT TO public WITH CHECK (true);
-
-CREATE POLICY published_log_update_public_tmp
-  ON public.published_log FOR UPDATE TO public USING (true) WITH CHECK (true);
+DO $$
+BEGIN
+  RAISE EXCEPTION
+    'Retired. Do not re-enable public writes on results, scores, or published_log. See sql/one_time_setup.sql.';
+END $$;
