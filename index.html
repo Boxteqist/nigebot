@@ -130,7 +130,7 @@
   <div class="container">
 
   <div id="predLockBanner" class="lock-banner hidden">
-    🔒 <strong>Predictions are locked.</strong> Qualifying has started — no more changes can be made for this weekend.
+    🔒 <strong id="predLockTitle">Predictions are locked.</strong><span id="predLockDetail"></span>
   </div>
   <div id="predOpenBanner" style="background:#2a1a0a;border:1px solid #5a3a1a;border-radius:8px;padding:8px 14px;font-size:0.9rem;color:#ffd27f;margin-bottom:16px;font-weight:600;">
     <div id="lockCountdown"></div>
@@ -251,7 +251,7 @@
     <div class="card">
       <h2>NigeBot’s Regulations</h2>
       <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">Each race weekend you predict the top 3 in qualifying and the top 3 in the Grand Prix. On Sprint weekends you also predict the top 3 in the Sprint Race. You also predict the fastest lap in the Grand Prix. Points are awarded as follows:</p>
-      <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">Predictions lock automatically when qualifying starts. Get your picks in before then — after that, no changes can be made.</p>
+      <p style="color:#888;font-size:0.85rem;margin-bottom:16px;">On a sprint weekend, sprint picks lock when the sprint starts. Qualifying, race, and fastest-lap picks lock when qualifying starts. The same driver cannot fill all three places in one session. The database enforces both rules.</p>
       <div class="two-col" style="margin-bottom:20px;">
         <div>
           <div class="section-title">Race & Sprint Race</div>
@@ -334,6 +334,7 @@ if (appVersionEl) {
 
 let currentRaceId = null;
 let currentQualiAt = null;
+let currentSprintAt = null;
 let currentRound = null;
 let currentIsSprintWeekend = false;
 let allRaces = [];
@@ -357,19 +358,54 @@ async function sbUpsert(path, body) {
   if (!r.ok) { const err = await r.json(); return { error: err }; }
   return r.json();
 }
+async function sbPatch(path, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    method: 'PATCH',
+    headers: { ...hdrs, 'Prefer': 'return=representation' },
+    body: JSON.stringify(body)
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) return { error: data };
+  return data;
+}
 
-function isLocked() {
-  if (!currentQualiAt) return false;
-  return new Date() >= new Date(currentQualiAt);
+function isQualiLocked(nowMs) {
+  return sessionStarted(currentQualiAt, nowMs);
+}
+function isSprintLocked(nowMs) {
+  if (!currentIsSprintWeekend) return false;
+  return sessionStarted(currentSprintAt, nowMs);
+}
+function isFullyLocked(nowMs) {
+  return isQualiLocked(nowMs) && (!currentIsSprintWeekend || isSprintLocked(nowMs));
+}
+function fieldLocked(el, nowMs) {
+  if (!el || !el.id) return false;
+  return /_s[123]$/.test(el.id) ? isSprintLocked(nowMs) : isQualiLocked(nowMs);
 }
 
 function applyLockState() {
-  const locked = isLocked();
-  document.getElementById('predLockBanner').classList.toggle('hidden', !locked);
-  document.getElementById('predOpenBanner').classList.toggle('hidden', locked);
+  const qualiLocked = isQualiLocked();
+  const sprintLocked = isSprintLocked();
+  const fullyLocked = isFullyLocked();
+  const banner = document.getElementById('predLockBanner');
+  const title = document.getElementById('predLockTitle');
+  const detail = document.getElementById('predLockDetail');
+  banner.classList.toggle('hidden', !(qualiLocked || sprintLocked));
+  if (fullyLocked) {
+    title.textContent = 'Predictions are locked.';
+    detail.textContent = ' Qualifying has started — no more changes for this weekend.';
+  } else if (sprintLocked) {
+    title.textContent = 'Sprint picks are locked.';
+    detail.textContent = ' Qualifying, race, and fastest lap stay open until qualifying starts.';
+  } else if (qualiLocked) {
+    title.textContent = 'Qualifying and race picks are locked.';
+    detail.textContent = ' Sprint picks stay open until the sprint starts.';
+  }
+  document.getElementById('predOpenBanner').classList.toggle('hidden', fullyLocked);
   document.querySelectorAll('.player-save-btn').forEach(btn => {
-    btn.disabled = locked;
-    if (locked) {
+    btn.disabled = fullyLocked;
+    if (fullyLocked) {
       btn.textContent = "🔒 We're locked and loaded.";
       btn.classList.add('green');
     } else {
@@ -378,6 +414,7 @@ function applyLockState() {
     }
   });
   document.querySelectorAll('#predGrid input').forEach(el => {
+    const locked = fieldLocked(el);
     el.disabled = locked;
     if (locked) el.style.borderColor = '';
   });
@@ -399,42 +436,44 @@ function startLockCountdown() {
     return;
   }
 
-  function update() {
-    if (isLocked()) {
-      el.textContent = 'Predictions are locked.';
-      if (lockTimerId) {
-        clearInterval(lockTimerId);
-        lockTimerId = null;
-      }
-      return;
-    }
-
-    const now = Date.now();
-    const lockTime = new Date(currentQualiAt).getTime();
-    const diffMs = lockTime - now;
-    if (diffMs <= 0) {
-      el.textContent = 'Predictions are locked.';
-      if (lockTimerId) {
-        clearInterval(lockTimerId);
-        lockTimerId = null;
-      }
-      applyLockState();
-      return;
-    }
-
-    const totalSec = Math.floor(diffMs / 1000);
+  function formatRemain(ms) {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
     const days = Math.floor(totalSec / 86400);
     const hours = Math.floor((totalSec % 86400) / 3600);
     const minutes = Math.floor((totalSec % 3600) / 60);
     const seconds = totalSec % 60;
-
     const parts = [];
     if (days) parts.push(`${days}d`);
     if (hours || days) parts.push(`${hours}h`);
     if (minutes || hours || days) parts.push(`${minutes}m`);
     parts.push(`${seconds}s`);
+    return parts.join(' ');
+  }
 
-    el.textContent = `⏱️ Prediction lock countdown: ${parts.join(' ')}`;
+  let lockKey = '';
+  function update() {
+    const now = Date.now();
+    const key = `${isSprintLocked(now)}|${isQualiLocked(now)}`;
+    if (key !== lockKey) {
+      lockKey = key;
+      applyLockState();
+    }
+    if (isFullyLocked(now)) {
+      el.textContent = 'Predictions are locked.';
+      if (lockTimerId) {
+        clearInterval(lockTimerId);
+        lockTimerId = null;
+      }
+      return;
+    }
+    const bits = [];
+    if (currentIsSprintWeekend && currentSprintAt && !sessionStarted(currentSprintAt, now)) {
+      bits.push(`Sprint locks in ${formatRemain(new Date(currentSprintAt).getTime() - now)}`);
+    }
+    if (currentQualiAt && !sessionStarted(currentQualiAt, now)) {
+      bits.push(`Qualifying locks in ${formatRemain(new Date(currentQualiAt).getTime() - now)}`);
+    }
+    el.textContent = bits.length ? `⏱️ ${bits.join(' · ')}` : '';
   }
 
   update();
@@ -497,24 +536,54 @@ async function onRaceChange() {
   raceStatus.classList.remove('hidden');
   const qualiDate = race.Qualifying?.date || race.date;
   const qualiTime = race.Qualifying?.time || '12:00:00Z';
-  currentQualiAt = `${qualiDate}T${qualiTime}`;
+  const jolpicaQualiAt = `${qualiDate}T${qualiTime}`;
+  const jolpicaRaceAt = `${race.date}T${race.time || '12:00:00Z'}`;
+  const jolpicaSprintAt = race.Sprint?.date
+    ? `${race.Sprint.date}T${race.Sprint.time || '12:00:00Z'}`
+    : null;
+  currentQualiAt = jolpicaQualiAt;
+  currentSprintAt = jolpicaSprintAt;
   try {
-    const isSprintWeekend = (await jolpicaSprintRoundScheduled(season, round)) || !!race.Sprint;
+    const isSprintWeekend = !!race.Sprint || (await jolpicaSprintRoundScheduled(season, round));
     if (gen !== raceLoadGeneration) return;
-    const upserted = await sbUpsert('races', {
-      season: parseInt(season), round: parseInt(round), name: race.raceName,
-      qualifying_at: currentQualiAt,
-      race_at: `${race.date}T${race.time||'12:00:00Z'}`
-    });
+    const seasonNum = parseInt(season, 10);
+    const roundNum = parseInt(round, 10);
+    let existing = await sbGet(`races?season=eq.${seasonNum}&round=eq.${roundNum}`);
     if (gen !== raceLoadGeneration) return;
-    currentRaceId = upserted?.[0]?.id;
-    if (!currentRaceId) {
-      const ex = await sbGet(`races?season=eq.${season}&round=eq.${round}`);
+    let row = Array.isArray(existing) ? existing[0] : null;
+    if (!row?.id) {
+      const inserted = await sbUpsert('races', {
+        season: seasonNum,
+        round: roundNum,
+        name: race.raceName,
+        qualifying_at: jolpicaQualiAt,
+        race_at: jolpicaRaceAt,
+        sprint_at: jolpicaSprintAt,
+        is_sprint: isSprintWeekend
+      });
       if (gen !== raceLoadGeneration) return;
-      currentRaceId = ex?.[0]?.id;
-      currentQualiAt = ex?.[0]?.qualifying_at || currentQualiAt;
+      row = Array.isArray(inserted) ? inserted[0] : null;
+      if (!row?.id) {
+        const again = await sbGet(`races?season=eq.${seasonNum}&round=eq.${roundNum}`);
+        row = Array.isArray(again) ? again[0] : null;
+      }
+      if (!row?.id) throw new Error(inserted?.error?.message || 'Could not save this race');
+    } else {
+      const patch = {};
+      if (race.raceName && race.raceName !== row.name) patch.name = race.raceName;
+      if (!row.qualifying_at) patch.qualifying_at = jolpicaQualiAt;
+      if (!row.race_at) patch.race_at = jolpicaRaceAt;
+      if (!row.sprint_at && jolpicaSprintAt) patch.sprint_at = jolpicaSprintAt;
+      if (!row.is_sprint && isSprintWeekend) patch.is_sprint = true;
+      if (Object.keys(patch).length) {
+        const patched = await sbPatch(`races?id=eq.${row.id}`, patch);
+        if (Array.isArray(patched) && patched[0]?.id) row = patched[0];
+      }
     }
-    currentIsSprintWeekend = isSprintWeekend;
+    currentRaceId = row.id;
+    currentQualiAt = row.qualifying_at || jolpicaQualiAt;
+    currentSprintAt = row.sprint_at || jolpicaSprintAt;
+    currentIsSprintWeekend = row.is_sprint === true || isSprintWeekend;
     raceStatus.className = 'status-msg success';
     raceStatus.textContent = `✅ ${race.raceName} loaded`;
     setTimeout(() => raceStatus.classList.add('hidden'), 3000);
@@ -530,7 +599,7 @@ async function onRaceChange() {
   } catch(e) {
     if (gen !== raceLoadGeneration) return;
     raceStatus.className = 'status-msg error';
-    raceStatus.textContent = '❌ Failed to load race.';
+    raceStatus.textContent = `❌ Failed to load race. ${e.message || ''}`.trim();
   }
 }
 
@@ -567,7 +636,7 @@ function renderPredGrid() {
 }
 
 function validateDriver(el) {
-  if (isLocked()) return;
+  if (fieldLocked(el)) return;
   const val = el.value.trim().toUpperCase();
   if (!val) { el.style.borderColor = ''; return; }
   if (DRIVER_CODES[val]) { el.style.borderColor = '#4caf50'; el.title = DRIVER_CODES[val]; }
@@ -596,12 +665,24 @@ function setPlayerSaveStatus(player, msg, isError) {
   el.style.color = isError ? '#ff6b6b' : '#4caf50';
   el.classList.remove('hidden');
   if (el._statusTimer) clearTimeout(el._statusTimer);
-  el._statusTimer = setTimeout(() => { el.textContent = ''; el._statusTimer = null; }, 3000);
+  el._statusTimer = setTimeout(() => { el.textContent = ''; el._statusTimer = null; }, isError ? 8000 : 3000);
 }
 
 async function savePlayerPredictions(player) {
   if (!currentRaceId) { showStatus('saveStatus','error','Select a race first.'); return; }
-  if (isLocked()) { showStatus('saveStatus','error','🔒 Predictions are locked — no more changes can be made for this weekend.'); return; }
+  if (isFullyLocked()) { showStatus('saveStatus','error','🔒 Predictions are locked — no more changes can be made for this weekend.'); return; }
+  if (threeIdentical(getVal(`${player}_q1`), getVal(`${player}_q2`), getVal(`${player}_q3`))) {
+    setPlayerSaveStatus(player, 'Qualifying picks cannot be the same driver three times.', true);
+    return;
+  }
+  if (currentIsSprintWeekend && threeIdentical(getVal(`${player}_s1`), getVal(`${player}_s2`), getVal(`${player}_s3`))) {
+    setPlayerSaveStatus(player, 'Sprint picks cannot be the same driver three times.', true);
+    return;
+  }
+  if (threeIdentical(getVal(`${player}_r1`), getVal(`${player}_r2`), getVal(`${player}_r3`))) {
+    setPlayerSaveStatus(player, 'Race picks cannot be the same driver three times.', true);
+    return;
+  }
   const invalid = [];
   ['q1','q2','q3','r1','r2','r3'].forEach(f => {
     const val = getVal(`${player}_${f}`);
@@ -640,7 +721,7 @@ async function savePlayerPredictions(player) {
   if (res && !res.error) {
     setPlayerSaveStatus(player, 'Saved', false);
   } else {
-    setPlayerSaveStatus(player, 'Error saving.', true);
+    setPlayerSaveStatus(player, res?.error?.message || 'Error saving.', true);
   }
 }
 

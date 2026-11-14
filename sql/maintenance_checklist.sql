@@ -7,12 +7,21 @@
 -- 2) Rename 2026 rounds to match Jolpica (wrong GP at a round number)
 --    Full script: sql/sync_2026_race_names.sql  (replaces the older R1–R6-only fix)
 
--- 3) Verify predictions + publish policies (read-only)
+-- 3) Policies and grants (read-only).
+--    results, scores, published_log: SELECT only. No *_public_tmp policies.
+--    anon/authenticated must not have TRUNCATE or DELETE on those tables.
 SELECT tablename, policyname, cmd
 FROM pg_policies
 WHERE schemaname = 'public'
-  AND tablename IN ('predictions', 'results', 'scores', 'published_log')
+  AND tablename IN ('players', 'predictions', 'published_log', 'races', 'results', 'scores')
 ORDER BY tablename, policyname;
+
+SELECT table_name, privilege_type, grantee
+FROM information_schema.role_table_grants
+WHERE table_schema = 'public'
+  AND grantee IN ('anon', 'authenticated')
+  AND table_name IN ('players', 'predictions', 'published_log', 'races', 'results', 'scores')
+ORDER BY table_name, grantee, privilege_type;
 
 -- 4) Orphan check: races with no predictions, results, or scores (candidates to delete manually)
 SELECT r.season, r.round, r.name, r.id
